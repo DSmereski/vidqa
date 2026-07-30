@@ -31,6 +31,37 @@ def main(argv=None):
     p.add_argument("video")
     p.add_argument("--threshold", type=float, default=27.0)
 
+    p = sub.add_parser("report", help="one-call composite QA verdict")
+    p.add_argument("video")
+    p.add_argument("--golden", default=None)
+    p.add_argument("--at", type=float, default=None)
+
+    p = sub.add_parser("audio", help="silences, clipping, volume stats")
+    p.add_argument("video")
+
+    p = sub.add_parser("ocr", help="read text off a frame")
+    p.add_argument("video")
+    p.add_argument("--at", type=float, default=None)
+
+    p = sub.add_parser("find", help="locate a template image in a frame")
+    p.add_argument("video")
+    p.add_argument("--template", required=True)
+    p.add_argument("--at", type=float, default=None)
+    p.add_argument("--threshold", type=float, default=None, help="default 0.8")
+
+    p = sub.add_parser("ask", help="ask a local VLM about the video (fully on-device)")
+    p.add_argument("video")
+    p.add_argument("question")
+    p.add_argument("--model", default=None, help="default qwen3-vl:8b")
+    p.add_argument("--frames", type=int, default=None, help="default 6")
+    p.add_argument("--enum", default=None, help="comma-separated allowed answers")
+    p.add_argument("--expect", default=None, help="exit 1 unless the answer equals this")
+
+    p = sub.add_parser("live", help="capture live frametimes of a running process (PresentMon)")
+    p.add_argument("process", help="process name, e.g. mygame.exe")
+    p.add_argument("--seconds", type=int, default=10)
+    p.add_argument("--presentmon", default=None, help="path to PresentMon exe")
+
     args = parser.parse_args(argv)
     try:
         result, code = _dispatch(args)
@@ -45,10 +76,11 @@ def main(argv=None):
 
 
 def _dispatch(args):
-    for attr in ("video", "candidate", "golden"):
+    for attr in ("video", "candidate", "golden", "template"):
         path = getattr(args, attr, None)
         if path is not None and not os.path.exists(path):
             raise ToolError(f"file not found: {path}")
+
     if args.cmd == "probe":
         from .probe import probe
         return probe(args.video), 0
@@ -57,17 +89,47 @@ def _dispatch(args):
         return timing(args.video), 0
     if args.cmd == "diff":
         from .diff import diff
-        opts = {}
-        if args.ssim_min is not None:
-            opts["ssim_min"] = args.ssim_min
-        if args.cell_max is not None:
-            opts["cell_max"] = args.cell_max
         result = diff(
-            args.candidate, args.golden, at=args.at, mask_out=args.mask_out, **opts,
+            args.candidate, args.golden, at=args.at, mask_out=args.mask_out,
+            **_given(ssim_min=args.ssim_min, cell_max=args.cell_max),
         )
         return result, 0 if result["pass"] else 1
-    from .scenes import scenes
-    return scenes(args.video, threshold=args.threshold), 0
+    if args.cmd == "scenes":
+        from .scenes import scenes
+        return scenes(args.video, threshold=args.threshold), 0
+    if args.cmd == "report":
+        from .report import report
+        result = report(args.video, golden=args.golden, at=args.at)
+        return result, 0 if result["verdict"]["pass"] else 1
+    if args.cmd == "audio":
+        from .audio import audio
+        return audio(args.video), 0
+    if args.cmd == "ocr":
+        from .ocr import ocr
+        return ocr(args.video, at=args.at), 0
+    if args.cmd == "find":
+        from .find import find
+        result = find(
+            args.video, args.template, at=args.at,
+            **_given(threshold=args.threshold),
+        )
+        return result, 0 if result["found"] else 1
+    if args.cmd == "ask":
+        from .ask import ask
+        enum = [e.strip() for e in args.enum.split(",")] if args.enum else None
+        result = ask(
+            args.video, args.question, enum=enum,
+            **_given(model=args.model, frames=args.frames),
+        )
+        code = 1 if args.expect is not None and result["answer"] != args.expect else 0
+        return result, code
+    from .live import live
+    return live(args.process, seconds=args.seconds, presentmon=args.presentmon), 0
+
+
+def _given(**kwargs):
+    """Only pass through flags the user actually set, so module defaults rule."""
+    return {k: v for k, v in kwargs.items() if v is not None}
 
 
 if __name__ == "__main__":

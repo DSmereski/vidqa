@@ -40,5 +40,11 @@ def r4(x):
     return round(float(x), 4)
 
 
+def pct(ordered, p):
+    """Nearest-rank percentile on a pre-sorted list."""
+    rank = max(1, -(-len(ordered) * p // 100))
+    return ordered[min(len(ordered), rank) - 1]
+
+
 def jdump(obj):
     return json.dumps(obj, sort_keys=True, separators=(",", ":"))

@@ -65,8 +65,44 @@ def media(tmp_path_factory):
     small = root / "small.png"
     ff("-i", str(golden), "-vf", "scale=160:120", str(small))
 
+    # audio: 1 s tone, 2 s silence, 1 s tone
+    silence_wav = root / "silence.wav"
+    norm = "aformat=sample_fmts=s16:sample_rates=44100:channel_layouts=mono"
+    ff("-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+       "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono:d=2",
+       "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+       "-filter_complex",
+       f"[0:a]{norm}[a0];[1:a]{norm}[a1];[2:a]{norm}[a2];"
+       "[a0][a1][a2]concat=n=3:v=0:a=1[out]",
+       "-map", "[out]", str(silence_wav))
+
+    # sine generates at 1/8 amplitude, so x20 drives it well past full scale
+    clipped_wav = root / "clipped.wav"
+    ff("-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+       "-af", "volume=20", str(clipped_wav))
+
+    av = root / "av.mp4"
+    ff("-f", "lavfi", "-i", f"testsrc2=duration=2:size={SIZE}:rate={FPS}",
+       "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+       "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p",
+       "-c:a", "aac", "-shortest", str(av))
+
+    text_png = root / "text.png"
+    drawtext = ("drawtext=fontfile='C\\:/Windows/Fonts/arial.ttf':"
+                "text='SCORE 12345 GAME OVER':fontsize=48:fontcolor=white:x=40:y=150")
+    ff("-f", "lavfi", "-i", "color=black:size=640x360:rate=1:duration=1",
+       "-frames:v", "1", "-vf", drawtext, str(text_png))
+
+    tpl = root / "tpl.png"
+    ff("-i", str(golden), "-vf", "crop=64:48:100:80", str(tpl))
+
+    red = root / "red.mp4"
+    ff("-f", "lavfi", "-i", f"color=red:duration=2:size={SIZE}:rate={FPS}",
+       "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p", str(red))
+
     return {
         "clean": clean, "freeze": freeze, "gap": gap, "cut": cut,
         "golden": golden, "same": same, "corrupt": corrupt, "other": other,
-        "small": small,
+        "small": small, "silence_wav": silence_wav, "clipped_wav": clipped_wav,
+        "av": av, "text": text_png, "tpl": tpl, "red": red,
     }

@@ -7,7 +7,7 @@ Three independent signals, because capture mode changes where stutter shows up:
 """
 import re
 
-from .ffutil import ToolError, r4, run, safe_path
+from .ffutil import ToolError, pct, r4, run, safe_path
 
 STUTTER_FACTOR = 1.5   # a pts delta this many times the median counts as stutter
 FREEZE_MIN_S = 0.4     # freezedetect minimum duration
@@ -34,9 +34,9 @@ def timing(path):
         "na_frames": na_frames,
         "fps_effective": r4(1000.0 / median) if median > 0 else None,
         "frame_time_ms": {
-            "p50": r4(_pct(ordered, 50)),
-            "p95": r4(_pct(ordered, 95)),
-            "p99": r4(_pct(ordered, 99)),
+            "p50": r4(pct(ordered, 50)),
+            "p95": r4(pct(ordered, 95)),
+            "p99": r4(pct(ordered, 99)),
             "max": r4(ordered[-1]),
         },
         "stutter": {"event_count": len(events), "events": events[:EVENT_CAP]},
@@ -45,12 +45,6 @@ def timing(path):
         "freeze_count": len(freezes),
         "freezes": freezes[:EVENT_CAP],
     }
-
-
-def _pct(ordered, p):
-    """Nearest-rank percentile on a pre-sorted list."""
-    rank = max(1, -(-len(ordered) * p // 100))
-    return ordered[min(len(ordered), rank) - 1]
 
 
 def _frame_pts(path):
