@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vidqa"
+version = "0.1.0"
+description = "Local, deterministic video QA: frame timing, golden-frame diff, scene cuts. Compact JSON for agents."
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "opencv-python>=4.10",
+    "scenedetect>=0.6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+vidqa = "vidqa.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["vidqa*"]
