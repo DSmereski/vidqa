@@ -27,14 +27,15 @@ V2_CSV = (
 
 def test_parse_v1_columns():
     result = parse_csv(V1_CSV, process="game.exe", seconds=10)
-    assert result["frame_count"] == 21
+    assert result["frame_count"] == 20
+    assert result["skipped_rows"] == 0
     assert 59.0 <= result["fps_avg"] <= 61.0
     assert result["frame_time_ms"]["p50"] == 16.7
 
 
 def test_parse_v2_columns():
     result = parse_csv(V2_CSV)
-    assert result["frame_count"] == 21
+    assert result["frame_count"] == 20
     assert result["frame_time_ms"]["p99"] == 16.7
 
 

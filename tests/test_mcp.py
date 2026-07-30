@@ -40,8 +40,11 @@ def test_mcp_stdio_roundtrip(media):
         send({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
               "params": {"name": "probe",
                          "arguments": {"path": str(media["clean"])}}})
+        send({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+              "params": {"name": "probe",
+                         "arguments": {"path": "does-not-exist.mp4"}}})
         deadline = time.time() + 60
-        while time.time() < deadline and not (2 in responses and 3 in responses):
+        while time.time() < deadline and not {2, 3, 4} <= responses.keys():
             time.sleep(0.2)
     finally:
         try:
@@ -61,3 +64,7 @@ def test_mcp_stdio_roundtrip(media):
     if "result" in parsed:  # SDK wraps bare dict returns
         parsed = parsed["result"]
     assert parsed["video"]["width"] == 320
+
+    bad = responses[4]["result"]
+    assert bad.get("isError") is True
+    assert "file not found" in bad["content"][0]["text"]

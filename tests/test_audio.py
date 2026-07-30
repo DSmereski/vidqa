@@ -21,3 +21,12 @@ def test_clipping_detected(media):
 def test_no_audio_stream_is_an_error(media):
     with pytest.raises(ToolError, match="no audio stream"):
         audio(str(media["clean"]))
+
+
+def test_silence_running_to_eof_detected(media):
+    # ffmpeg 8 closes the silence at EOF, so duration is present (~1.3 s);
+    # the duration_s=None branch stays as a guard for decoders that don't
+    result = audio(str(media["end_silence"]))
+    assert result["silence_count"] >= 1
+    longest = max(s["duration_s"] or 0 for s in result["silences"])
+    assert 1.0 <= longest <= 1.6

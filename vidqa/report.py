@@ -33,8 +33,10 @@ def report(path, golden=None, at=None):
         if a["clipping_suspected"]:
             issues.append("audio_clipping")
         for s in a["silences"]:
-            if s["duration_s"] is not None and s["duration_s"] > MAX_SILENCE_S:
-                issues.append(f"silence@{s['start_s']}s({s['duration_s']}s)")
+            dur = s["duration_s"]
+            # duration None = silent to EOF (audio dropout) — always an issue
+            if dur is None or dur > MAX_SILENCE_S:
+                issues.append(f"silence@{s['start_s']}s({dur if dur is not None else 'end'}s)")
 
     if golden is not None:
         from .diff import diff

@@ -3,10 +3,9 @@
 Exit codes: 0 = ok (gate passed), 1 = gate failed, 2 = error.
 """
 import argparse
-import os
 import sys
 
-from .ffutil import ToolError, jdump
+from .ffutil import ToolError, jdump, require_file
 
 
 def main(argv=None):
@@ -78,8 +77,8 @@ def main(argv=None):
 def _dispatch(args):
     for attr in ("video", "candidate", "golden", "template"):
         path = getattr(args, attr, None)
-        if path is not None and not os.path.exists(path):
-            raise ToolError(f"file not found: {path}")
+        if path is not None:
+            require_file(path)
 
     if args.cmd == "probe":
         from .probe import probe

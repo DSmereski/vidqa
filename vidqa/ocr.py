@@ -30,8 +30,9 @@ def ocr(path, at=None):
             ys = [int(p[1]) for p in boxes[i]]
             box = [min(xs), min(ys), max(xs), max(ys)]
         blocks.append({"text": str(text), "conf": r4(conf), "box": box})
+    capped = blocks[:BLOCK_CAP]
     return {
         "block_count": len(blocks),
-        "blocks": blocks[:BLOCK_CAP],
-        "joined": " ".join(b["text"] for b in blocks),
+        "blocks": capped,
+        "joined": " ".join(b["text"] for b in capped),
     }

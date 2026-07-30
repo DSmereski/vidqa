@@ -26,6 +26,20 @@ def test_audio_section_included_when_present(media):
     assert result["audio"]["clipping_suspected"] is False
 
 
+def test_audio_dropout_with_unknown_duration_fails_gate(media, monkeypatch):
+    import vidqa.audio
+
+    monkeypatch.setattr(vidqa.audio, "audio", lambda path: {
+        "silence_count": 1,
+        "silences": [{"start_s": 0.7, "duration_s": None}],
+        "max_volume_db": -18.1, "mean_volume_db": -30.0,
+        "clipping_suspected": False,
+    })
+    result = report(str(media["av"]))
+    assert result["verdict"]["pass"] is False
+    assert "silence@0.7s(ends)" in result["verdict"]["issues"]
+
+
 def test_golden_gate_wired_in(media):
     good = report(str(media["clean"]), golden=str(media["golden"]), at=0.5)
     assert "golden_diff_failed" not in good["verdict"]["issues"]

@@ -26,9 +26,9 @@ def live(process, seconds=10, presentmon=None):
                 exe, "--process_name", process, "--output_file", out.name,
                 "--timed", str(seconds), "--terminate_after_timed",
                 "--stop_existing_session",
-            ])
+            ], timeout=seconds + 30)
         except ToolError as exc:
-            if "access denied" in str(exc).lower():
+            if "access denied" in getattr(exc, "stderr", str(exc)).lower():
                 raise ToolError(
                     "PresentMon needs ETW access (one-time setup): run from an "
                     "admin terminal, or in an elevated prompt run "
@@ -52,11 +52,12 @@ def parse_csv(text, process=None, seconds=None):
     if column is None:
         raise ToolError(f"no frame-time column in capture: {reader.fieldnames}")
     deltas = []
+    skipped_rows = 0
     for row in reader:
         try:
             deltas.append(float(row[column]))
         except (KeyError, TypeError, ValueError):
-            continue
+            skipped_rows += 1
     if len(deltas) < 2:
         raise ToolError("PresentMon captured fewer than 2 frames")
     ordered = sorted(deltas)
@@ -64,7 +65,8 @@ def parse_csv(text, process=None, seconds=None):
     return {
         "process": process,
         "capture_seconds": seconds,
-        "frame_count": len(deltas) + 1,
+        "frame_count": len(deltas),
+        "skipped_rows": skipped_rows,
         "fps_avg": r4(1000.0 / mean) if mean > 0 else None,
         "frame_time_ms": {
             "p50": r4(pct(ordered, 50)),

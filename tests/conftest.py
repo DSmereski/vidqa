@@ -100,9 +100,19 @@ def media(tmp_path_factory):
     ff("-f", "lavfi", "-i", f"color=red:duration=2:size={SIZE}:rate={FPS}",
        "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p", str(red))
 
+    # audio dies at 0.7 s and never returns (ffmpeg 8 still closes the
+    # silence at EOF, so this yields a terminated 1.3 s silence)
+    end_silence = root / "endsilence.mkv"
+    ff("-f", "lavfi", "-i", f"testsrc2=duration=2:size={SIZE}:rate={FPS}",
+       "-f", "lavfi", "-i", "sine=frequency=440:duration=0.7",
+       "-af", "apad", "-t", "2",
+       "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p",
+       "-c:a", "pcm_s16le", str(end_silence))
+
     return {
         "clean": clean, "freeze": freeze, "gap": gap, "cut": cut,
         "golden": golden, "same": same, "corrupt": corrupt, "other": other,
         "small": small, "silence_wav": silence_wav, "clipped_wav": clipped_wav,
         "av": av, "text": text_png, "tpl": tpl, "red": red,
+        "end_silence": end_silence,
     }

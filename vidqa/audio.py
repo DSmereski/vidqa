@@ -17,7 +17,7 @@ def audio(path):
             "-vn", "-f", "null", "-",
         ]).stderr
     except ToolError as exc:
-        if "does not contain any stream" in str(exc):
+        if "does not contain any stream" in getattr(exc, "stderr", str(exc)):
             raise ToolError(f"no audio stream in {path}")
         raise
     starts = [float(m.group(1)) for m in re.finditer(r"silence_start: (-?[\d.]+)", stderr)]

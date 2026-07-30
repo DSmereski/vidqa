@@ -9,6 +9,7 @@ import base64
 import json
 import os
 import tempfile
+import urllib.error
 import urllib.request
 
 from .ffutil import ToolError, run, safe_path
@@ -20,9 +21,12 @@ FRAMES_DEFAULT = 6
 FRAME_WIDTH = 854   # downscale before sending: plenty for UI reading, cheap on vision tokens
 TIMEOUT_S = 300
 EVIDENCE_CAP = 400
+ANSWER_CAP = 200
 
 
 def ask(path, question, model=MODEL_DEFAULT, frames=FRAMES_DEFAULT, enum=None):
+    if frames < 1:
+        raise ToolError("frames must be >= 1")
     images = _sample_frames(path, frames)
     answer_schema = (
         {"type": "string", "enum": list(enum)} if enum else {"type": "string"}
@@ -55,8 +59,11 @@ def ask(path, question, model=MODEL_DEFAULT, frames=FRAMES_DEFAULT, enum=None):
         parsed = json.loads(body["message"]["content"])
     except (KeyError, TypeError, ValueError):
         raise ToolError(f"unexpected ollama response shape: {str(body)[:200]}")
+    answer = parsed.get("answer")
+    if isinstance(answer, str):
+        answer = answer[:ANSWER_CAP]
     return {
-        "answer": parsed.get("answer"),
+        "answer": answer,
         "confidence": parsed.get("confidence"),
         "evidence": str(parsed.get("evidence", ""))[:EVIDENCE_CAP],
         "model": model,
@@ -73,14 +80,17 @@ def _ollama_chat(payload):
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
             return json.load(resp)
+    except urllib.error.HTTPError as exc:
+        detail = exc.read(400).decode("utf-8", "replace")
+        raise ToolError(f"ollama returned HTTP {exc.code}: {detail}")
     except OSError as exc:
         raise ToolError(f"ollama not reachable at {OLLAMA_URL}: {exc}")
 
 
 def _sample_frames(path, n):
     duration = probe(path)["duration_s"]
-    if not duration:
-        raise ToolError(f"cannot determine duration of {path}")
+    if duration is None or duration <= 0:
+        raise ToolError(f"cannot sample frames: duration of {path} is {duration}")
     images = []
     for i in range(n):
         t = duration * (i + 0.5) / n

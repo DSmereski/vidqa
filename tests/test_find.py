@@ -11,3 +11,12 @@ def test_template_located_within_2px(media):
 def test_template_absent(media):
     result = find(str(media["other"]), str(media["tpl"]))
     assert result["found"] is False
+
+
+def test_template_larger_than_frame_errors(media):
+    import pytest
+
+    from vidqa.ffutil import ToolError
+
+    with pytest.raises(ToolError, match="larger than the frame"):
+        find(str(media["tpl"]), str(media["golden"]))
