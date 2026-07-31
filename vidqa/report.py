@@ -19,8 +19,8 @@ def report(path, golden=None, at=None):
 
     t = sections["timing"]
     for f in t["freezes"]:
-        dur = f["duration_s"] if f["duration_s"] is not None else "end"
-        issues.append(f"freeze@{f['start_s']}s({dur}s)")
+        label = f"{f['duration_s']}s" if f["duration_s"] is not None else "to-end"
+        issues.append(f"freeze@{f['start_s']}s({label})")
     if t["dup_ratio"] > DUP_RATIO_MAX:
         issues.append(f"dup_ratio={t['dup_ratio']}")
     if t["stutter"]["event_count"] > STUTTER_EVENTS_MAX:
@@ -36,7 +36,8 @@ def report(path, golden=None, at=None):
             dur = s["duration_s"]
             # duration None = silent to EOF (audio dropout) — always an issue
             if dur is None or dur > MAX_SILENCE_S:
-                issues.append(f"silence@{s['start_s']}s({dur if dur is not None else 'end'}s)")
+                label = f"{dur}s" if dur is not None else "to-end"
+                issues.append(f"silence@{s['start_s']}s({label})")
 
     if golden is not None:
         from .diff import diff

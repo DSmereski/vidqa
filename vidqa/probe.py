@@ -11,13 +11,19 @@ def probe(path):
         if s.get("codec_type") == "video" and video is None:
             avg = _fps(s.get("avg_frame_rate"))
             real = _fps(s.get("r_frame_rate"))
+            if avg is None or real is None:
+                mode = "unknown"
+            elif abs(avg - real) < 0.01:
+                mode = "cfr"
+            else:
+                mode = "vfr-suspected"
             video = {
                 "codec": s.get("codec_name"),
                 "width": s.get("width"),
                 "height": s.get("height"),
                 "pix_fmt": s.get("pix_fmt"),
                 "fps_avg": r4(avg) if avg else None,
-                "fps_mode": "cfr" if avg and real and abs(avg - real) < 0.01 else "vfr-suspected",
+                "fps_mode": mode,
             }
         elif s.get("codec_type") == "audio" and audio is None:
             rate = _num(s.get("sample_rate"))

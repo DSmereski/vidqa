@@ -115,7 +115,11 @@ def _dispatch(args):
         return result, 0 if result["found"] else 1
     if args.cmd == "ask":
         from .ask import ask
-        enum = [e.strip() for e in args.enum.split(",")] if args.enum else None
+        enum = None
+        if args.enum is not None:
+            enum = [e.strip() for e in args.enum.split(",") if e.strip()]
+            if not enum:
+                raise ToolError("--enum needs at least one non-empty value")
         result = ask(
             args.video, args.question, enum=enum,
             **_given(model=args.model, frames=args.frames),

@@ -101,7 +101,10 @@ def _sample_frames(path, n):
                  "-i", safe_path(path), "-frames:v", "1",
                  "-vf", f"scale='min({FRAME_WIDTH},iw)':-2", "-q:v", "4", tmp.name])
             with open(tmp.name, "rb") as fh:
-                images.append(base64.b64encode(fh.read()).decode())
+                data = fh.read()
+            if not data:
+                raise ToolError(f"no frame extracted at {t:.3f}s from {path}")
+            images.append(base64.b64encode(data).decode())
         finally:
             os.unlink(tmp.name)
     return images

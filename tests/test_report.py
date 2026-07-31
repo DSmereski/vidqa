@@ -37,7 +37,7 @@ def test_audio_dropout_with_unknown_duration_fails_gate(media, monkeypatch):
     })
     result = report(str(media["av"]))
     assert result["verdict"]["pass"] is False
-    assert "silence@0.7s(ends)" in result["verdict"]["issues"]
+    assert "silence@0.7s(to-end)" in result["verdict"]["issues"]
 
 
 def test_golden_gate_wired_in(media):
