@@ -10,8 +10,17 @@ _ENGINE = None
 def _engine():
     global _ENGINE
     if _ENGINE is None:
+        import logging
         from rapidocr import RapidOCR
-        _ENGINE = RapidOCR()
+        # rapidocr re-forces its logger to INFO on every internal Logger()
+        # construction, so a plain setLevel doesn't stick — gate globally
+        # while the engine builds, then pin the logger to WARNING.
+        logging.disable(logging.INFO)
+        try:
+            _ENGINE = RapidOCR()
+        finally:
+            logging.disable(logging.NOTSET)
+        logging.getLogger("RapidOCR").setLevel(logging.WARNING)
     return _ENGINE
 
 
