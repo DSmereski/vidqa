@@ -49,6 +49,13 @@ python -m venv .venv
 | `vidqa find <video\|image> --template t.png [--at t]` | Locate a known UI element; exit 1 if absent. |
 | `vidqa ask <video> "question" [--enum a,b,c] [--expect a]` | Local-VLM Q&A; `--expect` turns it into a gate. |
 | `vidqa live <process.exe> [--seconds 10]` | Real frametimes of a *running* app via PresentMon ETW (Windows). |
+| `vidqa when <video> "text" [--template el.png]` | *When* text or an element is visible: intervals in seconds; exit 1 if never. |
+| `vidqa shot <video> --out f.png --at 12.5 \| --at-text "Error" [--crop x,y,w,h]` | Precise frame evidence, by timestamp or by visible text. |
+| `vidqa strip <video> --out sheet.png [--every 1]` | Filmstrip contact sheet: the whole run as one timestamped thumbnail grid. |
+| `vidqa clip <video> --out cut.mp4 --from 10 --to 14` | Small mp4/gif excerpt for bug tickets. |
+| `vidqa ci <video> --rules rules.json` | CI gate: an expectations file → one exit code. |
+| `vidqa trace <trace.zip> [--video v --at-step "click" --out f.png]` | Playwright trace → step timeline; grab the frame where a step completed. |
+| `vidqa record-android --while "cmd" --out rec.mp4` | Record the Android device screen (adb) while a test command runs; exits 1 if the command fails. |
 
 Example:
 
@@ -58,6 +65,29 @@ $ vidqa timing capture.mp4
 
 $ vidqa ask capture.mp4 "What color is the health bar?" --enum red,yellow,green --expect green
 {"answer":"green","confidence":"high","evidence":"...","frames_used":6,"model":"qwen3-vl:8b"}
+```
+
+## Test recordings (web / Android / iOS)
+
+Point vidqa at whatever your runner saved — a Playwright video, an adb
+screenrecord, an XCUITest attachment, an OBS capture:
+
+```sh
+vidqa when run.webm "Payment failed"                      # when did it appear?
+vidqa shot run.webm --out evidence.png --at-text "Payment failed"
+vidqa strip run.webm --out sheet.png                      # whole run at a glance
+vidqa ci run.webm --rules checkout.rules.json             # gate it in CI
+```
+
+A rules file turns a recording into a pass/fail check:
+
+```json
+{"rules": [
+  {"type": "expect_text", "text": "Order confirmed", "by_s": 20},
+  {"type": "forbid_text", "builtin": "error_pages"},
+  {"type": "max_freeze_s", "seconds": 3},
+  {"type": "no_blank_frames"}
+]}
 ```
 
 ## Design contract
@@ -102,7 +132,7 @@ the "Performance Log Users" group and sign back in.
 .venv/Scripts/python -m pytest -q
 ```
 
-47 tests; fixtures are synthesized on the fly with ffmpeg (injected
+77 tests; fixtures are synthesized on the fly with ffmpeg (injected
 freezes, dropped frames, seeded corruption, silence, clipping, drawn
 text) plus Windows text-to-speech for the `speech` tests, so no test
 media is checked in. `eval/run_eval.py --runs 3` exercises the VLM lane

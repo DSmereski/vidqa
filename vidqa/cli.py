@@ -75,6 +75,13 @@ def main(argv=None):
     p.add_argument("--at-step", default=None, help="grab the frame where this step completed")
     p.add_argument("--out", default=None, help="png path for --at-step")
 
+    p = sub.add_parser("record-android",
+                       help="record the device screen while a command runs (adb); exits 1 if the command fails")
+    p.add_argument("--while", dest="cmd_while", required=True,
+                   help="shell command to run during the recording")
+    p.add_argument("--out", required=True)
+    p.add_argument("--serial", default=None, help="adb device serial")
+
     p = sub.add_parser("speech", help="transcribe speech (faster-whisper, local CPU)")
     p.add_argument("video")
     p.add_argument("--model", default=None, help="default large-v3-turbo; tiny/base are faster")
@@ -184,6 +191,10 @@ def _dispatch(args):
         result = trace(args.tracezip, video=args.video,
                        at_step=args.at_step, out=args.out)
         return result, 0 if result.get("found", True) else 1
+    if args.cmd == "record-android":
+        from .record_android import record_android
+        result = record_android(args.cmd_while, args.out, serial=args.serial)
+        return result, 0 if result["cmd_exit"] == 0 else 1
     if args.cmd == "speech":
         from .speech import speech
         result = speech(

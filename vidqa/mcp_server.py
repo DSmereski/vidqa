@@ -103,6 +103,13 @@ def trace(path: str, video: str | None = None, at_step: str | None = None,
 
 
 @server.tool()
+def record_android(cmd: str, out: str, serial: str | None = None) -> dict:
+    """Record the Android device screen (adb screenrecord) while a shell command runs."""
+    from .record_android import record_android as impl
+    return impl(cmd, out, serial=serial)
+
+
+@server.tool()
 def speech(path: str, model: str = SPEECH_MODEL_DEFAULT, full: bool = False) -> dict:
     """Transcribe spoken audio in a video (faster-whisper, local CPU)."""
     from .speech import speech as impl
