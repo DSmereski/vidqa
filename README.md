@@ -56,6 +56,8 @@ python -m venv .venv
 | `vidqa ci <video> --rules rules.json` | CI gate: an expectations file → one exit code. |
 | `vidqa trace <trace.zip> [--video v --at-step "click" --out f.png]` | Playwright trace → step timeline; grab the frame where a step completed. |
 | `vidqa record-android --while "cmd" --out rec.mp4` | Record the Android device screen (adb) while a test command runs; exits 1 if the command fails. |
+| `vidqa srt <video> --out events.srt` | Detected events (freezes, stutter, cuts, silences) as a subtitle track — any player shows the analysis on the scrubber. |
+| `vidqa rundiff <a> <b> [--shots dir]` | Where two runs of the same test diverge: first divergence time + the frame pair; exit 1 on divergence. |
 
 Example:
 
@@ -132,7 +134,7 @@ the "Performance Log Users" group and sign back in.
 .venv/Scripts/python -m pytest -q
 ```
 
-77 tests; fixtures are synthesized on the fly with ffmpeg (injected
+86 tests; fixtures are synthesized on the fly with ffmpeg (injected
 freezes, dropped frames, seeded corruption, silence, clipping, drawn
 text) plus Windows text-to-speech for the `speech` tests, so no test
 media is checked in. `eval/run_eval.py --runs 3` exercises the VLM lane

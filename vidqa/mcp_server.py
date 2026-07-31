@@ -86,6 +86,22 @@ def clip(path: str, out: str, start: float, end: float) -> dict:
 
 
 @server.tool()
+def srt(path: str, out: str) -> dict:
+    """Write detected events (freezes, stutter, scene cuts, silences) as an .srt subtitle track."""
+    from .srt import srt as impl
+    return impl(require_file(path), out)
+
+
+@server.tool()
+def rundiff(a: str, b: str, step: float = 0.5, threshold: int = 8,
+            shots: str | None = None) -> dict:
+    """Compare two recordings of the same test: first divergence time + per-sample distances."""
+    from .rundiff import rundiff as impl
+    return impl(require_file(a), require_file(b), step=step,
+                threshold=threshold, shots=shots)
+
+
+@server.tool()
 def ci(path: str, rules: str, step: float = 0.5) -> dict:
     """Evaluate a QA rules file (expect/forbid text, templates, freezes, blanks) against a recording."""
     from .ci import ci as impl

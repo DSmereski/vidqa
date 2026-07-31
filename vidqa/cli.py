@@ -64,6 +64,17 @@ def main(argv=None):
     p.add_argument("--from", dest="start", type=float, required=True)
     p.add_argument("--to", dest="end", type=float, required=True)
 
+    p = sub.add_parser("srt", help="write detected events (freezes, cuts, stutter, silences) as an .srt track")
+    p.add_argument("video")
+    p.add_argument("--out", required=True)
+
+    p = sub.add_parser("rundiff", help="compare two recordings of the same test; exit 1 on divergence")
+    p.add_argument("a")
+    p.add_argument("b")
+    p.add_argument("--step", type=float, default=None, help="sample interval s, default 0.5")
+    p.add_argument("--threshold", type=int, default=None, help="pHash distance floor, default 8")
+    p.add_argument("--shots", default=None, help="dir to write the first-divergence frame pair")
+
     p = sub.add_parser("ci", help="evaluate a rules file against a recording; one exit code")
     p.add_argument("video")
     p.add_argument("--rules", required=True, help="rules json (see vidqa.ci docstring)")
@@ -126,7 +137,7 @@ def main(argv=None):
 
 
 def _dispatch(args):
-    for attr in ("video", "candidate", "golden", "template"):
+    for attr in ("video", "candidate", "golden", "template", "a", "b"):
         path = getattr(args, attr, None)
         if path is not None:
             require_file(path)
@@ -180,6 +191,16 @@ def _dispatch(args):
     if args.cmd == "clip":
         from .clip import clip
         return clip(args.video, args.out, args.start, args.end), 0
+    if args.cmd == "srt":
+        from .srt import srt
+        return srt(args.video, args.out), 0
+    if args.cmd == "rundiff":
+        from .rundiff import rundiff
+        result = rundiff(
+            args.a, args.b, shots=args.shots,
+            **_given(step=args.step, threshold=args.threshold),
+        )
+        return result, 1 if result["diverged"] else 0
     if args.cmd == "ci":
         from .ci import ci
         require_file(args.rules)
