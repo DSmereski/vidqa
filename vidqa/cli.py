@@ -69,6 +69,12 @@ def main(argv=None):
     p.add_argument("--rules", required=True, help="rules json (see vidqa.ci docstring)")
     p.add_argument("--step", type=float, default=None, help="scan interval s, default 0.5")
 
+    p = sub.add_parser("trace", help="Playwright trace.zip -> step timeline (+ frame at a step)")
+    p.add_argument("tracezip")
+    p.add_argument("--video", default=None, help="the run's video, for --at-step")
+    p.add_argument("--at-step", default=None, help="grab the frame where this step completed")
+    p.add_argument("--out", default=None, help="png path for --at-step")
+
     p = sub.add_parser("speech", help="transcribe speech (faster-whisper, local CPU)")
     p.add_argument("video")
     p.add_argument("--model", default=None, help="default large-v3-turbo; tiny/base are faster")
@@ -172,6 +178,12 @@ def _dispatch(args):
         require_file(args.rules)
         result = ci(args.video, args.rules, **_given(step=args.step))
         return result, 0 if result["pass"] else 1
+    if args.cmd == "trace":
+        from .trace import trace
+        require_file(args.tracezip)
+        result = trace(args.tracezip, video=args.video,
+                       at_step=args.at_step, out=args.out)
+        return result, 0 if result.get("found", True) else 1
     if args.cmd == "speech":
         from .speech import speech
         result = speech(

@@ -93,6 +93,16 @@ def ci(path: str, rules: str, step: float = 0.5) -> dict:
 
 
 @server.tool()
+def trace(path: str, video: str | None = None, at_step: str | None = None,
+          out: str | None = None) -> dict:
+    """Playwright trace.zip -> step timeline; optionally grab the frame where a step completed."""
+    from .trace import trace as impl
+    if video is not None:
+        require_file(video)
+    return impl(require_file(path), video=video, at_step=at_step, out=out)
+
+
+@server.tool()
 def speech(path: str, model: str = SPEECH_MODEL_DEFAULT, full: bool = False) -> dict:
     """Transcribe spoken audio in a video (faster-whisper, local CPU)."""
     from .speech import speech as impl
