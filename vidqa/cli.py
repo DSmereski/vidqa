@@ -38,6 +38,13 @@ def main(argv=None):
     p = sub.add_parser("audio", help="silences, clipping, volume stats")
     p.add_argument("video")
 
+    p = sub.add_parser("speech", help="transcribe speech (faster-whisper, local CPU)")
+    p.add_argument("video")
+    p.add_argument("--model", default=None, help="default large-v3-turbo; tiny/base are faster")
+    p.add_argument("--expect", default=None,
+                   help="exit 1 unless the transcript contains this (case-insensitive)")
+    p.add_argument("--full", action="store_true", help="include segments, no text cap")
+
     p = sub.add_parser("ocr", help="read text off a frame")
     p.add_argument("video")
     p.add_argument("--at", type=float, default=None)
@@ -103,6 +110,13 @@ def _dispatch(args):
     if args.cmd == "audio":
         from .audio import audio
         return audio(args.video), 0
+    if args.cmd == "speech":
+        from .speech import speech
+        result = speech(
+            args.video, expect=args.expect, full=args.full,
+            **_given(model=args.model),
+        )
+        return result, 0 if result.get("expect_found", True) else 1
     if args.cmd == "ocr":
         from .ocr import ocr
         return ocr(args.video, at=args.at), 0

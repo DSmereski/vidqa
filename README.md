@@ -22,6 +22,8 @@ zero API cost, but nothing about it is game-specific.
   (default `qwen3-vl:8b`)
 - Optional, for `live` (Windows only): Intel PresentMon — a copy is
   bundled in `tools/`
+- Optional, for `speech`: faster-whisper (`pip install vidqa[speech]`;
+  runs on CPU, model downloads on first use)
 
 ## Install
 
@@ -42,6 +44,7 @@ python -m venv .venv
 | `vidqa diff <cand> --golden ref [--at t] [--mask-out m.png]` | Golden-frame gate: SSIM floor + 8×8-grid worst-cell error + pHash scene check. |
 | `vidqa scenes <video>` | Scene-cut timestamps. |
 | `vidqa audio <video>` | Silences, clipping, volume levels. |
+| `vidqa speech <video> [--expect "phrase"]` | Transcribe spoken audio (faster-whisper, local CPU); `--expect` gates on a substring. |
 | `vidqa ocr <video\|image> [--at t]` | Read on-screen text (RapidOCR, CPU, offline after first model download). |
 | `vidqa find <video\|image> --template t.png [--at t]` | Locate a known UI element; exit 1 if absent. |
 | `vidqa ask <video> "question" [--enum a,b,c] [--expect a]` | Local-VLM Q&A; `--expect` turns it into a gate. |
@@ -71,6 +74,10 @@ $ vidqa ask capture.mp4 "What color is the health bar?" --enum red,yellow,green 
   `--enum`/`--expect` only.
 - **Cheap first.** For agents: deterministic metrics → OCR/template →
   local VLM. Most questions never need a model at all.
+- **`timing` freezes measure static content.** Menus, loading screens,
+  and an idle player all count — that is all recorded footage can show
+  (verified against real game captures). For true performance hitches of
+  a running build, use `vidqa live` (ETW ground truth).
 
 ## MCP server
 
@@ -95,10 +102,11 @@ the "Performance Log Users" group and sign back in.
 .venv/Scripts/python -m pytest -q
 ```
 
-42 tests; fixtures are synthesized on the fly with ffmpeg (injected
+47 tests; fixtures are synthesized on the fly with ffmpeg (injected
 freezes, dropped frames, seeded corruption, silence, clipping, drawn
-text), so no test media is checked in. `eval/run_eval.py --runs 3`
-exercises the VLM lane end-to-end against a local Ollama model.
+text) plus Windows text-to-speech for the `speech` tests, so no test
+media is checked in. `eval/run_eval.py --runs 3` exercises the VLM lane
+end-to-end against a local Ollama model.
 
 ## License
 

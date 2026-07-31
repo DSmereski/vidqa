@@ -4,6 +4,7 @@ from mcp.server import MCPServer
 
 from .ask import FRAMES_DEFAULT, MODEL_DEFAULT
 from .ffutil import require_file
+from .speech import MODEL_DEFAULT as SPEECH_MODEL_DEFAULT
 
 server = MCPServer("vidqa")
 
@@ -50,6 +51,13 @@ def audio(path: str) -> dict:
     """Audio glitch checks: silences, clipping, volume stats."""
     from .audio import audio as impl
     return impl(require_file(path))
+
+
+@server.tool()
+def speech(path: str, model: str = SPEECH_MODEL_DEFAULT, full: bool = False) -> dict:
+    """Transcribe spoken audio in a video (faster-whisper, local CPU)."""
+    from .speech import speech as impl
+    return impl(require_file(path), model=model, full=full)
 
 
 @server.tool()
