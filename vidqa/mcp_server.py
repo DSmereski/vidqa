@@ -54,6 +54,24 @@ def audio(path: str) -> dict:
 
 
 @server.tool()
+def when(path: str, text: str | None = None, template: str | None = None,
+         step: float = 0.5) -> dict:
+    """Find when given text (OCR) or a template image is visible: intervals in seconds."""
+    from .when import when as impl
+    if template is not None:
+        require_file(template)
+    return impl(require_file(path), text=text, template=template, step=step)
+
+
+@server.tool()
+def shot(path: str, out: str, at: float | None = None,
+         at_text: str | None = None) -> dict:
+    """Extract a frame as PNG evidence, at a timestamp or where given text is visible."""
+    from .shot import shot as impl
+    return impl(require_file(path), out, at=at, at_text=at_text)
+
+
+@server.tool()
 def speech(path: str, model: str = SPEECH_MODEL_DEFAULT, full: bool = False) -> dict:
     """Transcribe spoken audio in a video (faster-whisper, local CPU)."""
     from .speech import speech as impl

@@ -38,6 +38,21 @@ def main(argv=None):
     p = sub.add_parser("audio", help="silences, clipping, volume stats")
     p.add_argument("video")
 
+    p = sub.add_parser("when", help="find when text or a template is visible")
+    p.add_argument("video")
+    p.add_argument("text", nargs="?", default=None)
+    p.add_argument("--template", default=None, help="element image instead of text")
+    p.add_argument("--step", type=float, default=None, help="sample interval s, default 0.5")
+    p.add_argument("--threshold", type=float, default=None, help="template floor, default 0.8")
+
+    p = sub.add_parser("shot", help="extract a frame (optionally cropped) as png evidence")
+    p.add_argument("video")
+    p.add_argument("--out", required=True)
+    p.add_argument("--at", type=float, default=None)
+    p.add_argument("--at-text", default=None, help="frame where this text is visible")
+    p.add_argument("--crop", default=None, help="x,y,w,h")
+    p.add_argument("--step", type=float, default=None, help="--at-text sample interval")
+
     p = sub.add_parser("speech", help="transcribe speech (faster-whisper, local CPU)")
     p.add_argument("video")
     p.add_argument("--model", default=None, help="default large-v3-turbo; tiny/base are faster")
@@ -110,6 +125,26 @@ def _dispatch(args):
     if args.cmd == "audio":
         from .audio import audio
         return audio(args.video), 0
+    if args.cmd == "when":
+        from .when import when
+        result = when(
+            args.video, text=args.text, template=args.template,
+            **_given(step=args.step, threshold=args.threshold),
+        )
+        return result, 0 if result["found"] else 1
+    if args.cmd == "shot":
+        from .shot import shot
+        crop = None
+        if args.crop is not None:
+            parts = args.crop.split(",")
+            if len(parts) != 4 or not all(p.strip().lstrip("-").isdigit() for p in parts):
+                raise ToolError("--crop wants four integers: x,y,w,h")
+            crop = [int(p) for p in parts]
+        result = shot(
+            args.video, args.out, at=args.at, at_text=args.at_text, crop=crop,
+            **_given(step=args.step),
+        )
+        return result, 0 if result["found"] else 1
     if args.cmd == "speech":
         from .speech import speech
         result = speech(

@@ -15,6 +15,12 @@ def _engine():
     return _ENGINE
 
 
+def scan_text(img):
+    """OCR a BGR frame array -> joined text (internal reuse, e.g. `when`)."""
+    out = _engine()(img)
+    return " ".join(str(t) for t in (getattr(out, "txts", None) or []))
+
+
 def ocr(path, at=None):
     img = load_frame(path, at)
     out = _engine()(img)

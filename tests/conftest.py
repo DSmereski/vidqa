@@ -109,10 +109,23 @@ def media(tmp_path_factory):
        "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p",
        "-c:a", "pcm_s16le", str(end_silence))
 
+    # 'ERROR 500' on a black box, visible only t=1..2 of a 3 s clip
+    flash = root / "flash.mp4"
+    flashtext = ("drawtext=fontfile='C\\:/Windows/Fonts/arial.ttf':"
+                 "text='ERROR 500':fontsize=40:fontcolor=white:"
+                 "box=1:boxcolor=black:boxborderw=12:x=40:y=100:"
+                 "enable='between(t,1,2)'")
+    ff("-f", "lavfi", "-i", f"testsrc2=duration=3:size={SIZE}:rate={FPS}",
+       "-vf", flashtext, "-c:v", "libx264", "-qp", "0",
+       "-pix_fmt", "yuv420p", str(flash))
+    flash_tpl = root / "flash_tpl.png"
+    ff("-ss", "1.5", "-i", str(flash), "-frames:v", "1",
+       "-vf", "crop=240:64:28:88", str(flash_tpl))
+
     return {
         "clean": clean, "freeze": freeze, "gap": gap, "cut": cut,
         "golden": golden, "same": same, "corrupt": corrupt, "other": other,
         "small": small, "silence_wav": silence_wav, "clipped_wav": clipped_wav,
         "av": av, "text": text_png, "tpl": tpl, "red": red,
-        "end_silence": end_silence,
+        "end_silence": end_silence, "flash": flash, "flash_tpl": flash_tpl,
     }
