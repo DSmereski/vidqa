@@ -9,6 +9,17 @@ from .ffutil import ToolError
 DEVICE_TMP = "/sdcard/vidqa-record.mp4"
 
 
+def _wait_gone(base, tries=20):
+    """True once no screenrecord process remains on the device."""
+    for _ in range(tries):
+        check = subprocess.run(base + ["shell", "pgrep", "screenrecord"],
+                               capture_output=True, text=True)
+        if not check.stdout.strip():
+            return True
+        time.sleep(0.5)
+    return False
+
+
 def record_android(cmd, out, serial=None, settle=1.0):
     adb = shutil.which("adb") or os.environ.get("VIDQA_ADB")
     if adb is None:
@@ -25,16 +36,20 @@ def record_android(cmd, out, serial=None, settle=1.0):
         time.sleep(settle)
         proc = subprocess.run(cmd, shell=True)
     finally:
-        # SIGINT lets screenrecord finalize the mp4; pkill covers busybox-less builds
+        # ONE SIGINT finalizes the mp4; a second one lands mid-finalize and
+        # kills the muxer before the moov atom is written (verified on the
+        # android-35 emulator). Escalate only if the first signal didn't land.
         subprocess.run(base + ["shell", "killall", "-2", "screenrecord"],
                        capture_output=True)
-        subprocess.run(base + ["shell", "pkill", "-2", "screenrecord"],
-                       capture_output=True)
+        if not _wait_gone(base):
+            subprocess.run(base + ["shell", "pkill", "-2", "screenrecord"],
+                           capture_output=True)
+            _wait_gone(base)
         try:
             rec.wait(timeout=15)
         except subprocess.TimeoutExpired:
             rec.kill()
-        time.sleep(settle)
+        time.sleep(max(settle, 1.0))
     pull = subprocess.run(base + ["pull", DEVICE_TMP, out],
                           capture_output=True, text=True)
     subprocess.run(base + ["shell", "rm", "-f", DEVICE_TMP], capture_output=True)
