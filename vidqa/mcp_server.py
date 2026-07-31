@@ -86,6 +86,13 @@ def clip(path: str, out: str, start: float, end: float) -> dict:
 
 
 @server.tool()
+def ci(path: str, rules: str, step: float = 0.5) -> dict:
+    """Evaluate a QA rules file (expect/forbid text, templates, freezes, blanks) against a recording."""
+    from .ci import ci as impl
+    return impl(require_file(path), require_file(rules), step=step)
+
+
+@server.tool()
 def speech(path: str, model: str = SPEECH_MODEL_DEFAULT, full: bool = False) -> dict:
     """Transcribe spoken audio in a video (faster-whisper, local CPU)."""
     from .speech import speech as impl
