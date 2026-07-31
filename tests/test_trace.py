@@ -23,13 +23,14 @@ def make_trace(path, events):
 
 @pytest.fixture()
 def tracezip(tmp_path):
+    # mirrors the real 1.6x event shape: class+method, no apiName
     return make_trace(tmp_path / "trace.zip", [
         {"type": "context-options", "monotonicTime": 1000.0, "wallTime": 1722400000000},
-        {"type": "before", "callId": "call@1", "startTime": 1500.0,
-         "apiName": "page.goto", "params": {"url": "http://x"}},
+        {"type": "before", "callId": "call@1", "startTime": 1500.0, "class": "Frame",
+         "method": "goto", "params": {"url": "http://x", "timeout": 30000}},
         {"type": "after", "callId": "call@1", "endTime": 2200.0},
-        {"type": "before", "callId": "call@2", "startTime": 2500.0,
-         "apiName": "page.click", "params": {"selector": "#buy"}},
+        {"type": "before", "callId": "call@2", "startTime": 2500.0, "class": "Frame",
+         "method": "click", "params": {"selector": "#buy", "timeout": 30000}},
         {"type": "after", "callId": "call@2", "endTime": 2600.0},
     ])
 
@@ -38,9 +39,9 @@ def test_steps_parsed_with_relative_times(tracezip):
     result = trace(tracezip)
     assert result["step_count"] == 2
     goto, click = result["steps"]
-    assert goto["title"] == "page.goto"
+    assert goto["title"] == "frame.goto" and goto["url"] == "http://x"
     assert (goto["start_s"], goto["end_s"]) == (0.5, 1.2)
-    assert click["title"] == "page.click" and click["selector"] == "#buy"
+    assert click["title"] == "frame.click" and click["selector"] == "#buy"
     assert (click["start_s"], click["end_s"]) == (1.5, 1.6)
 
 

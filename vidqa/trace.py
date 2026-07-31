@@ -61,13 +61,17 @@ def _parse(path):
         if e.get("type") != "after" or e.get("callId") not in befores:
             continue
         b = befores[e["callId"]]
+        # 1.3x traces carry apiName; current ones carry class+method (Frame.click)
+        title = b.get("apiName") or f"{b.get('class', '?').lower()}.{b.get('method', '?')}"
         step = {
-            "title": b.get("apiName", "?"),
+            "title": title,
             "start_s": r4((b["startTime"] - t0) / 1000.0),
             "end_s": r4((e.get("endTime", b["startTime"]) - t0) / 1000.0),
         }
-        selector = (b.get("params") or {}).get("selector")
-        if selector:
-            step["selector"] = selector
+        params = b.get("params") or {}
+        if params.get("selector"):
+            step["selector"] = params["selector"]
+        if params.get("url"):
+            step["url"] = params["url"]
         steps.append(step)
     return sorted(steps, key=lambda s: s["start_s"])
