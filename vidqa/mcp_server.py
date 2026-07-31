@@ -72,6 +72,20 @@ def shot(path: str, out: str, at: float | None = None,
 
 
 @server.tool()
+def strip(path: str, out: str, every: float = 1.0) -> dict:
+    """Filmstrip contact-sheet PNG: one glanceable thumbnail grid with timestamps."""
+    from .strip import strip as impl
+    return impl(require_file(path), out, every=every)
+
+
+@server.tool()
+def clip(path: str, out: str, start: float, end: float) -> dict:
+    """Cut a small excerpt (mp4 or gif) of the video for evidence/tickets."""
+    from .clip import clip as impl
+    return impl(require_file(path), out, start, end)
+
+
+@server.tool()
 def speech(path: str, model: str = SPEECH_MODEL_DEFAULT, full: bool = False) -> dict:
     """Transcribe spoken audio in a video (faster-whisper, local CPU)."""
     from .speech import speech as impl

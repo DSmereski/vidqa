@@ -53,6 +53,17 @@ def main(argv=None):
     p.add_argument("--crop", default=None, help="x,y,w,h")
     p.add_argument("--step", type=float, default=None, help="--at-text sample interval")
 
+    p = sub.add_parser("strip", help="filmstrip contact-sheet png of the whole video")
+    p.add_argument("video")
+    p.add_argument("--out", required=True)
+    p.add_argument("--every", type=float, default=None, help="seconds per thumb, default 1.0")
+
+    p = sub.add_parser("clip", help="cut a small excerpt (mp4 or gif) for tickets")
+    p.add_argument("video")
+    p.add_argument("--out", required=True)
+    p.add_argument("--from", dest="start", type=float, required=True)
+    p.add_argument("--to", dest="end", type=float, required=True)
+
     p = sub.add_parser("speech", help="transcribe speech (faster-whisper, local CPU)")
     p.add_argument("video")
     p.add_argument("--model", default=None, help="default large-v3-turbo; tiny/base are faster")
@@ -145,6 +156,12 @@ def _dispatch(args):
             **_given(step=args.step),
         )
         return result, 0 if result["found"] else 1
+    if args.cmd == "strip":
+        from .strip import strip
+        return strip(args.video, args.out, **_given(every=args.every)), 0
+    if args.cmd == "clip":
+        from .clip import clip
+        return clip(args.video, args.out, args.start, args.end), 0
     if args.cmd == "speech":
         from .speech import speech
         result = speech(
