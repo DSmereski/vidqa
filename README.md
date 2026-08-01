@@ -41,7 +41,7 @@ python -m venv .venv
 | `vidqa report <video> [--golden ref --at t]` | One-call verdict: probe + timing + scenes (+ audio, + golden diff). Start here. |
 | `vidqa probe <video>` | Streams, resolution, duration, CFR/VFR. |
 | `vidqa timing <video>` | Stutter, duplicate frames, freezes; frame-time p50/p95/p99. |
-| `vidqa diff <cand> --golden ref [--at t] [--mask-out m.png]` | Golden-frame gate: SSIM floor + 8×8-grid worst-cell error + pHash scene check. |
+| `vidqa diff <cand> --golden ref [--at t] [--mask-out m.png] [--ignore x,y,w,h]` | Golden-frame gate: SSIM floor + 8×8-grid worst-cell error + pHash scene check; `--ignore` excludes dynamic regions (clock, fps counter). |
 | `vidqa scenes <video>` | Scene-cut timestamps. |
 | `vidqa audio <video>` | Silences, clipping, volume levels. |
 | `vidqa speech <video> [--expect "phrase"]` | Transcribe spoken audio (faster-whisper, local CPU); `--expect` gates on a substring. |
@@ -57,7 +57,7 @@ python -m venv .venv
 | `vidqa trace <trace.zip> [--video v --at-step "click" --out f.png]` | Playwright trace → step timeline; grab the frame where a step completed. |
 | `vidqa record-android --while "cmd" --out rec.mp4` | Record the Android device screen (adb) while a test command runs; exits 1 if the command fails. |
 | `vidqa srt <video> --out events.srt` | Detected events (freezes, stutter, cuts, silences) as a subtitle track — any player shows the analysis on the scrubber. |
-| `vidqa rundiff <a> <b> [--shots dir]` | Where two runs of the same test diverge: first divergence time + the frame pair; exit 1 on divergence. |
+| `vidqa rundiff <a> <b> [--shots dir] [--ignore x,y,w,h] [--trace-a a.zip --trace-b b.zip]` | Where two runs of the same test diverge: by clock, or aligned by Playwright steps when traces are given; exit 1 on divergence. |
 
 Example:
 
@@ -134,7 +134,7 @@ the "Performance Log Users" group and sign back in.
 .venv/Scripts/python -m pytest -q
 ```
 
-86 tests; fixtures are synthesized on the fly with ffmpeg (injected
+92 tests; fixtures are synthesized on the fly with ffmpeg (injected
 freezes, dropped frames, seeded corruption, silence, clipping, drawn
 text) plus Windows text-to-speech for the `speech` tests, so no test
 media is checked in. `eval/run_eval.py --runs 3` exercises the VLM lane

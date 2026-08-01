@@ -61,3 +61,57 @@ def test_deterministic(pair):
     assert first.stdout == second.stdout
     out = json.loads(first.stdout)
     assert out["sampled"] == 6  # 3 s at 0.5 s step
+
+
+def test_ignore_suppresses_known_dynamic_region(pair):
+    result = rundiff(str(pair["a"]), str(pair["b"]),
+                     ignore=[[40, 40, 240, 160]])  # exactly the injected box
+    assert result["diverged"] is False
+    assert result["ignored"] == [[40, 40, 240, 160]]
+    proc = run_cli("rundiff", str(pair["a"]), str(pair["b"]),
+                   "--ignore", "40,40,240,160")
+    assert proc.returncode == 0
+
+
+def step_trace(path, methods_ends):
+    import zipfile
+    events = []
+    for i, (method, end_s) in enumerate(methods_ends, 1):
+        events.append({"type": "before", "callId": f"call@{i}",
+                       "startTime": 1000.0 + i, "class": "Frame",
+                       "method": method, "params": {}})
+        events.append({"type": "after", "callId": f"call@{i}",
+                       "endTime": 1000.0 + 1 + end_s * 1000.0})
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("trace.trace", "\n".join(json.dumps(e) for e in events))
+    return str(path)
+
+
+def test_step_aligned_divergence(pair, tmp_path):
+    ta = step_trace(tmp_path / "a.zip", [("goto", 1.0), ("click", 2.0)])
+    tb = step_trace(tmp_path / "b.zip", [("goto", 1.0), ("click", 2.0)])
+    shots = tmp_path / "shots"
+    result = rundiff(str(pair["a"]), str(pair["b"]),
+                     trace_a=ta, trace_b=tb, shots=str(shots))
+    assert result["mode"] == "steps"
+    assert [s["diverged"] for s in result["steps"]] == [False, True]
+    assert result["first_divergent_step"] == "frame.click"
+    assert result["diverged"] is True
+    assert (shots / "diverge_a.png").exists()
+
+
+def test_step_mode_same_video_matches(pair, tmp_path):
+    ta = step_trace(tmp_path / "a.zip", [("goto", 1.0), ("click", 2.0)])
+    tb = step_trace(tmp_path / "b.zip", [("goto", 1.0), ("click", 2.0)])
+    result = rundiff(str(pair["a"]), str(pair["a"]), trace_a=ta, trace_b=tb)
+    assert result["diverged"] is False
+    assert result["first_divergent_step"] is None
+
+
+def test_step_title_mismatch_is_divergence(pair, tmp_path):
+    ta = step_trace(tmp_path / "a.zip", [("goto", 1.0), ("click", 2.0)])
+    tb = step_trace(tmp_path / "b.zip", [("goto", 1.0), ("dblclick", 2.0)])
+    result = rundiff(str(pair["a"]), str(pair["b"]), trace_a=ta, trace_b=tb)
+    assert result["diverged"] is True
+    assert result["step_mismatch"] == {"index": 1, "a": "frame.click",
+                                       "b": "frame.dblclick"}

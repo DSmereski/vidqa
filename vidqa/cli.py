@@ -25,6 +25,8 @@ def main(argv=None):
     p.add_argument("--mask-out", default=None, help="write a diff-mask png here")
     p.add_argument("--ssim-min", type=float, default=None, help="default 0.95")
     p.add_argument("--cell-max", type=float, default=None, help="default 25.0")
+    p.add_argument("--ignore", action="append", default=None,
+                   help="x,y,w,h region to exclude (clock, fps counter); repeatable")
 
     p = sub.add_parser("scenes", help="scene cut timestamps")
     p.add_argument("video")
@@ -74,6 +76,10 @@ def main(argv=None):
     p.add_argument("--step", type=float, default=None, help="sample interval s, default 0.5")
     p.add_argument("--threshold", type=int, default=None, help="pHash distance floor, default 8")
     p.add_argument("--shots", default=None, help="dir to write the first-divergence frame pair")
+    p.add_argument("--ignore", action="append", default=None,
+                   help="x,y,w,h region to exclude (clock, fps counter); repeatable")
+    p.add_argument("--trace-a", default=None, help="Playwright trace for run a: align by steps, not clock")
+    p.add_argument("--trace-b", default=None, help="Playwright trace for run b")
 
     p = sub.add_parser("ci", help="evaluate a rules file against a recording; one exit code")
     p.add_argument("video")
@@ -152,6 +158,7 @@ def _dispatch(args):
         from .diff import diff
         result = diff(
             args.candidate, args.golden, at=args.at, mask_out=args.mask_out,
+            ignore=_rects(args.ignore),
             **_given(ssim_min=args.ssim_min, cell_max=args.cell_max),
         )
         return result, 0 if result["pass"] else 1
@@ -174,12 +181,7 @@ def _dispatch(args):
         return result, 0 if result["found"] else 1
     if args.cmd == "shot":
         from .shot import shot
-        crop = None
-        if args.crop is not None:
-            parts = args.crop.split(",")
-            if len(parts) != 4 or not all(p.strip().lstrip("-").isdigit() for p in parts):
-                raise ToolError("--crop wants four integers: x,y,w,h")
-            crop = [int(p) for p in parts]
+        crop = _rect(args.crop) if args.crop is not None else None
         result = shot(
             args.video, args.out, at=args.at, at_text=args.at_text, crop=crop,
             **_given(step=args.step),
@@ -196,8 +198,12 @@ def _dispatch(args):
         return srt(args.video, args.out), 0
     if args.cmd == "rundiff":
         from .rundiff import rundiff
+        for tr in (args.trace_a, args.trace_b):
+            if tr is not None:
+                require_file(tr)
         result = rundiff(
-            args.a, args.b, shots=args.shots,
+            args.a, args.b, shots=args.shots, ignore=_rects(args.ignore),
+            trace_a=args.trace_a, trace_b=args.trace_b,
             **_given(step=args.step, threshold=args.threshold),
         )
         return result, 1 if result["diverged"] else 0
@@ -248,6 +254,17 @@ def _dispatch(args):
         return result, code
     from .live import live
     return live(args.process, seconds=args.seconds, presentmon=args.presentmon), 0
+
+
+def _rect(value):
+    parts = value.split(",")
+    if len(parts) != 4 or not all(p.strip().lstrip("-").isdigit() for p in parts):
+        raise ToolError(f"'{value}': want four integers x,y,w,h")
+    return [int(p) for p in parts]
+
+
+def _rects(values):
+    return [_rect(v) for v in values] if values else None
 
 
 def _given(**kwargs):

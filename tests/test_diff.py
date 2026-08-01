@@ -61,3 +61,17 @@ def test_mask_write_failure_raises(media, tmp_path):
     missing_dir = tmp_path / "nope" / "mask.png"
     with pytest.raises(ToolError):
         diff(str(media["corrupt"]), str(media["golden"]), mask_out=str(missing_dir))
+
+
+def test_ignore_rect_excuses_dynamic_region(media):
+    bare = diff(str(media["corrupt"]), str(media["golden"]))
+    assert bare["pass"] is False
+    excused = diff(str(media["corrupt"]), str(media["golden"]),
+                   ignore=[[200, 150, 80, 60]])  # exactly the seeded box
+    assert excused["pass"] is True
+    assert excused["ignored"] == [[200, 150, 80, 60]]
+
+
+def test_ignore_out_of_bounds_raises(media):
+    with pytest.raises(ToolError):
+        diff(str(media["same"]), str(media["golden"]), ignore=[[300, 0, 100, 50]])

@@ -24,10 +24,11 @@ def timing(path: str) -> dict:
 
 
 @server.tool()
-def diff(candidate: str, golden: str, at: float | None = None) -> dict:
-    """Compare a frame (or video frame at a timestamp) against a golden image."""
+def diff(candidate: str, golden: str, at: float | None = None,
+         ignore: list[list[int]] | None = None) -> dict:
+    """Compare a frame against a golden image; ignore = [[x,y,w,h], ...] dynamic regions."""
     from .diff import diff as impl
-    return impl(require_file(candidate), require_file(golden), at=at)
+    return impl(require_file(candidate), require_file(golden), at=at, ignore=ignore)
 
 
 @server.tool()
@@ -94,11 +95,15 @@ def srt(path: str, out: str) -> dict:
 
 @server.tool()
 def rundiff(a: str, b: str, step: float = 0.5, threshold: int = 8,
-            shots: str | None = None) -> dict:
-    """Compare two recordings of the same test: first divergence time + per-sample distances."""
+            shots: str | None = None, ignore: list[list[int]] | None = None,
+            trace_a: str | None = None, trace_b: str | None = None) -> dict:
+    """Compare two runs of the same test: by clock, or by Playwright steps when traces given."""
     from .rundiff import rundiff as impl
-    return impl(require_file(a), require_file(b), step=step,
-                threshold=threshold, shots=shots)
+    for tr in (trace_a, trace_b):
+        if tr is not None:
+            require_file(tr)
+    return impl(require_file(a), require_file(b), step=step, threshold=threshold,
+                shots=shots, ignore=ignore, trace_a=trace_a, trace_b=trace_b)
 
 
 @server.tool()

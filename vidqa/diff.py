@@ -23,7 +23,7 @@ VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".webm"}
 
 
 def diff(candidate, golden, at=None, mask_out=None,
-         ssim_min=SSIM_MIN_DEFAULT, cell_max=CELL_MAX_DEFAULT):
+         ssim_min=SSIM_MIN_DEFAULT, cell_max=CELL_MAX_DEFAULT, ignore=None):
     img = load_frame(candidate, at)
     ref = load_frame(golden)
     result = {
@@ -42,6 +42,10 @@ def diff(candidate, golden, at=None, mask_out=None,
         return result
     ga = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     gb = cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY)
+    if ignore:
+        zero_rects(ga, ignore)
+        zero_rects(gb, ignore)
+        result["ignored"] = [list(r) for r in ignore]
     ph = int(np.count_nonzero(_phash(ga) != _phash(gb)))
     score = _ssim(ga.astype(np.float64), gb.astype(np.float64))
     cell_val, (row, col) = _worst_cell(ga, gb)
@@ -101,6 +105,18 @@ def _imwrite_png(path, image):
         buf.tofile(path)
     except OSError as exc:
         raise ToolError(f"could not write mask to {path}: {exc}")
+
+
+def zero_rects(gray, rects):
+    """Blank dynamic regions (clock, fps counter) so they can't fail a compare."""
+    for x, y, w, h in rects:
+        if w <= 0 or h <= 0 or x < 0 or y < 0 \
+                or x + w > gray.shape[1] or y + h > gray.shape[0]:
+            raise ToolError(
+                f"--ignore {x},{y},{w},{h} is outside the "
+                f"{gray.shape[1]}x{gray.shape[0]} frame"
+            )
+        gray[y:y + h, x:x + w] = 0
 
 
 def _phash(gray):
