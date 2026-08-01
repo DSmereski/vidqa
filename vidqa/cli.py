@@ -66,6 +66,18 @@ def main(argv=None):
     p.add_argument("--from", dest="start", type=float, required=True)
     p.add_argument("--to", dest="end", type=float, required=True)
 
+    p = sub.add_parser("load", help="loading behavior from video: time to first content + visual settle")
+    p.add_argument("video")
+    p.add_argument("--step", type=float, default=None, help="sample interval s, default 0.25")
+    p.add_argument("--content-by", type=float, default=None, help="exit 1 unless content appears by this time")
+    p.add_argument("--settled-by", type=float, default=None, help="exit 1 unless visually settled by this time")
+
+    p = sub.add_parser("bugpack", help="ticket-ready evidence folder: frame, clip, srt, report, summary")
+    p.add_argument("video")
+    p.add_argument("--at", type=float, required=True)
+    p.add_argument("--out", required=True)
+    p.add_argument("--title", default=None)
+
     p = sub.add_parser("srt", help="write detected events (freezes, cuts, stutter, silences) as an .srt track")
     p.add_argument("video")
     p.add_argument("--out", required=True)
@@ -193,6 +205,16 @@ def _dispatch(args):
     if args.cmd == "clip":
         from .clip import clip
         return clip(args.video, args.out, args.start, args.end), 0
+    if args.cmd == "load":
+        from .load import load
+        result = load(
+            args.video, content_by=args.content_by, settled_by=args.settled_by,
+            **_given(step=args.step),
+        )
+        return result, 0 if result["pass"] else 1
+    if args.cmd == "bugpack":
+        from .bugpack import bugpack
+        return bugpack(args.video, args.at, args.out, title=args.title), 0
     if args.cmd == "srt":
         from .srt import srt
         return srt(args.video, args.out), 0

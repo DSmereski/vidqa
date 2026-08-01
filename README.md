@@ -56,6 +56,8 @@ python -m venv .venv
 | `vidqa ci <video> --rules rules.json` | CI gate: an expectations file → one exit code. |
 | `vidqa trace <trace.zip> [--video v --at-step "click" --out f.png]` | Playwright trace → step timeline; grab the frame where a step completed. |
 | `vidqa record-android --while "cmd" --out rec.mp4` | Record the Android device screen (adb) while a test command runs; exits 1 if the command fails. |
+| `vidqa load <video> [--content-by S] [--settled-by S]` | Perceived loading from video alone: time to first content + visual settle; deadlines gate. |
+| `vidqa bugpack <video> --at T --out dir` | Ticket-ready evidence folder: frame, ±3s clip, event track, report JSON, summary.md with OCR. |
 | `vidqa srt <video> --out events.srt` | Detected events (freezes, stutter, cuts, silences) as a subtitle track — any player shows the analysis on the scrubber. |
 | `vidqa rundiff <a> <b> [--shots dir] [--ignore x,y,w,h] [--trace-a a.zip --trace-b b.zip]` | Where two runs of the same test diverge: by clock, or aligned by Playwright steps when traces are given; exit 1 on divergence. |
 
@@ -134,7 +136,7 @@ the "Performance Log Users" group and sign back in.
 .venv/Scripts/python -m pytest -q
 ```
 
-92 tests; fixtures are synthesized on the fly with ffmpeg (injected
+98 tests; fixtures are synthesized on the fly with ffmpeg (injected
 freezes, dropped frames, seeded corruption, silence, clipping, drawn
 text) plus Windows text-to-speech for the `speech` tests, so no test
 media is checked in. `eval/run_eval.py --runs 3` exercises the VLM lane

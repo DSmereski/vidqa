@@ -87,6 +87,22 @@ def clip(path: str, out: str, start: float, end: float) -> dict:
 
 
 @server.tool()
+def load(path: str, step: float = 0.25, content_by: float | None = None,
+         settled_by: float | None = None) -> dict:
+    """Loading behavior from video: time to first content and to visual settle; optional deadlines gate."""
+    from .load import load as impl
+    return impl(require_file(path), step=step, content_by=content_by,
+                settled_by=settled_by)
+
+
+@server.tool()
+def bugpack(path: str, at: float, out: str, title: str | None = None) -> dict:
+    """Emit a ticket-ready evidence folder (frame, clip, srt, report, summary) for a moment."""
+    from .bugpack import bugpack as impl
+    return impl(require_file(path), at, out, title=title)
+
+
+@server.tool()
 def srt(path: str, out: str) -> dict:
     """Write detected events (freezes, stutter, scene cuts, silences) as an .srt subtitle track."""
     from .srt import srt as impl

@@ -62,7 +62,7 @@ def test_mcp_stdio_roundtrip(media):
     assert tools == {"probe", "timing", "diff", "scenes", "report", "audio",
                      "ocr", "find", "ask", "live", "speech", "when", "shot",
                      "strip", "clip", "ci", "trace", "record_android", "srt",
-                     "rundiff"}  # every CLI command, no drops, no surprises
+                     "rundiff", "load", "bugpack"}  # every CLI command, exactly
 
     call = responses[3]["result"]
     assert not call.get("isError"), call
