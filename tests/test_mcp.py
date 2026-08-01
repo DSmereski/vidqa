@@ -43,8 +43,12 @@ def test_mcp_stdio_roundtrip(media):
         send({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
               "params": {"name": "probe",
                          "arguments": {"path": "does-not-exist.mp4"}}})
-        deadline = time.time() + 60
-        while time.time() < deadline and not {2, 3, 4} <= responses.keys():
+        send({"jsonrpc": "2.0", "id": 5, "method": "tools/call",
+              "params": {"name": "when",
+                         "arguments": {"path": str(media["flash"]),
+                                       "text": "ERROR"}}})
+        deadline = time.time() + 120
+        while time.time() < deadline and not {2, 3, 4, 5} <= responses.keys():
             time.sleep(0.2)
     finally:
         try:
@@ -53,10 +57,12 @@ def test_mcp_stdio_roundtrip(media):
         except subprocess.TimeoutExpired:
             proc.kill()
 
-    assert 2 in responses and 3 in responses, f"responses seen: {sorted(responses)}"
+    assert {2, 3, 4, 5} <= responses.keys(), f"responses seen: {sorted(responses)}"
     tools = {t["name"] for t in responses[2]["result"]["tools"]}
-    assert {"probe", "timing", "diff", "scenes", "report",
-            "audio", "ocr", "find", "ask"} <= tools
+    assert tools == {"probe", "timing", "diff", "scenes", "report", "audio",
+                     "ocr", "find", "ask", "live", "speech", "when", "shot",
+                     "strip", "clip", "ci", "trace", "record_android", "srt",
+                     "rundiff"}  # every CLI command, no drops, no surprises
 
     call = responses[3]["result"]
     assert not call.get("isError"), call
@@ -68,3 +74,10 @@ def test_mcp_stdio_roundtrip(media):
     bad = responses[4]["result"]
     assert bad.get("isError") is True
     assert "file not found" in bad["content"][0]["text"]
+
+    hit = responses[5]["result"]
+    assert not hit.get("isError"), hit
+    parsed = hit.get("structuredContent") or json.loads(hit["content"][0]["text"])
+    if "result" in parsed:
+        parsed = parsed["result"]
+    assert parsed["found"] is True and parsed["mode"] == "text"

@@ -131,6 +131,13 @@ def record_android(cmd: str, out: str, serial: str | None = None) -> dict:
 
 
 @server.tool()
+def live(process: str, seconds: int = 10) -> dict:
+    """Capture real frametimes of a RUNNING process via PresentMon ETW (Windows)."""
+    from .live import live as impl
+    return impl(process, seconds=seconds)
+
+
+@server.tool()
 def speech(path: str, model: str = SPEECH_MODEL_DEFAULT, full: bool = False) -> dict:
     """Transcribe spoken audio in a video (faster-whisper, local CPU)."""
     from .speech import speech as impl
