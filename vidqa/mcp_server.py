@@ -66,10 +66,27 @@ def when(path: str, text: str | None = None, template: str | None = None,
 
 @server.tool()
 def shot(path: str, out: str, at: float | None = None,
-         at_text: str | None = None) -> dict:
-    """Extract a frame as PNG evidence, at a timestamp or where given text is visible."""
+         at_text: str | None = None,
+         annotate: list[list] | None = None) -> dict:
+    """Extract a frame as PNG evidence; annotate = [[x,y,w,h] or [x,y,w,h,label], ...] boxes."""
     from .shot import shot as impl
-    return impl(require_file(path), out, at=at, at_text=at_text)
+    if annotate is not None:
+        annotate = [list(a) + [None] * (5 - len(a)) for a in annotate]
+    return impl(require_file(path), out, at=at, at_text=at_text, annotate=annotate)
+
+
+@server.tool()
+def text(path: str, step: float = 1.0, contains: str | None = None) -> dict:
+    """Index every text line the screen showed, with visibility intervals; toasts flagged."""
+    from .text import text as impl
+    return impl(require_file(path), step=step, contains=contains)
+
+
+@server.tool()
+def redact(path: str, out: str, regions: list[list[int]]) -> dict:
+    """Black out [[x,y,w,h], ...] regions (solid fill) so a recording can be shared."""
+    from .redact import redact as impl
+    return impl(require_file(path), out, regions)
 
 
 @server.tool()

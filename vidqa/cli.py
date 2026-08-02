@@ -54,6 +54,20 @@ def main(argv=None):
     p.add_argument("--at-text", default=None, help="frame where this text is visible")
     p.add_argument("--crop", default=None, help="x,y,w,h")
     p.add_argument("--step", type=float, default=None, help="--at-text sample interval")
+    p.add_argument("--annotate", action="append", default=None,
+                   help="x,y,w,h[,label]: bake a labeled box into the shot; repeatable")
+
+    p = sub.add_parser("text", help="index every text line the screen showed, with visibility intervals")
+    p.add_argument("video")
+    p.add_argument("--step", type=float, default=None, help="sample interval s, default 1.0")
+    p.add_argument("--contains", default=None,
+                   help="only lines containing this (case-insensitive); exit 1 if none")
+
+    p = sub.add_parser("redact", help="black out regions (PII, tokens) so a recording can be shared")
+    p.add_argument("video")
+    p.add_argument("--out", required=True)
+    p.add_argument("--region", action="append", required=True,
+                   help="x,y,w,h region to fill solid black; repeatable")
 
     p = sub.add_parser("strip", help="filmstrip contact-sheet png of the whole video")
     p.add_argument("video")
@@ -194,11 +208,19 @@ def _dispatch(args):
     if args.cmd == "shot":
         from .shot import shot
         crop = _rect(args.crop) if args.crop is not None else None
+        annotate = [_annot(a) for a in args.annotate] if args.annotate else None
         result = shot(
             args.video, args.out, at=args.at, at_text=args.at_text, crop=crop,
-            **_given(step=args.step),
+            annotate=annotate, **_given(step=args.step),
         )
         return result, 0 if result["found"] else 1
+    if args.cmd == "text":
+        from .text import text
+        result = text(args.video, contains=args.contains, **_given(step=args.step))
+        return result, 1 if args.contains is not None and not result["lines"] else 0
+    if args.cmd == "redact":
+        from .redact import redact
+        return redact(args.video, args.out, _rects(args.region)), 0
     if args.cmd == "strip":
         from .strip import strip
         return strip(args.video, args.out, **_given(every=args.every)), 0
@@ -287,6 +309,12 @@ def _rect(value):
 
 def _rects(values):
     return [_rect(v) for v in values] if values else None
+
+
+def _annot(value):
+    parts = value.split(",", 4)
+    rect = _rect(",".join(parts[:4]))
+    return rect + [parts[4].strip() if len(parts) == 5 else None]
 
 
 def _given(**kwargs):

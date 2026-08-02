@@ -44,6 +44,22 @@ def test_at_text_lands_on_visible_text(media, tmp_path):
     assert "ERROR" in ocr(str(out))["joined"].upper()
 
 
+def test_annotate_draws_box_and_echoes(media, tmp_path):
+    out = tmp_path / "ann.png"
+    result = shot(str(media["clean"]), str(out), at=1.0,
+                  annotate=[[10, 20, 100, 50, "bug here"]])
+    assert result["annotations"] == [[10, 20, 100, 50, "bug here"]]
+    img = cv2.imread(str(out))
+    assert tuple(img[20, 60]) == (0, 0, 255)  # top edge stroke, BGR red
+    assert tuple(img[70, 60]) == (0, 0, 255)  # bottom edge stroke
+
+
+def test_annotate_out_of_bounds_errors(media, tmp_path):
+    proc = run_cli("shot", str(media["clean"]), "--out", str(tmp_path / "x.png"),
+                   "--at", "1", "--annotate", "300,0,100,50,oops")
+    assert proc.returncode == 2
+
+
 def test_at_text_missing_exits_1_and_writes_nothing(media, tmp_path):
     out = tmp_path / "no.png"
     proc = run_cli("shot", str(media["flash"]), "--out", str(out),

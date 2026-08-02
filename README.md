@@ -69,7 +69,9 @@ python -m venv .venv
 | `vidqa ask <video> "question" [--enum a,b,c] [--expect a]` | Local-VLM Q&A; `--expect` turns it into a gate. |
 | `vidqa live <process.exe> [--seconds 10]` | Real frametimes of a *running* app via PresentMon ETW (Windows). |
 | `vidqa when <video> "text" [--template el.png]` | *When* text or an element is visible: intervals in seconds; exit 1 if never. |
-| `vidqa shot <video> --out f.png --at 12.5 \| --at-text "Error" [--crop x,y,w,h]` | Precise frame evidence, by timestamp or by visible text. |
+| `vidqa shot <video> --out f.png --at 12.5 \| --at-text "Error" [--crop x,y,w,h] [--annotate x,y,w,h,label]` | Precise frame evidence, by timestamp or by visible text; bake labeled boxes in. |
+| `vidqa text <video> [--contains q]` | Everything the screen ever said: every text line with visibility intervals; short-lived toasts/snackbars flagged. |
+| `vidqa redact <video> --out safe.mp4 --region x,y,w,h` | Black out regions (PII, tokens) — solid fill, not reversible blur — so a recording can be shared. |
 | `vidqa strip <video> --out sheet.png [--every 1]` | Filmstrip contact sheet: the whole run as one timestamped thumbnail grid. |
 | `vidqa clip <video> --out cut.mp4 --from 10 --to 14` | Small mp4/gif excerpt for bug tickets. |
 | `vidqa ci <video> --rules rules.json` | CI gate: an expectations file → one exit code. |
@@ -155,7 +157,7 @@ the "Performance Log Users" group and sign back in.
 .venv/Scripts/python -m pytest -q
 ```
 
-98 tests; fixtures are synthesized on the fly with ffmpeg (injected
+106 tests; fixtures are synthesized on the fly with ffmpeg (injected
 freezes, dropped frames, seeded corruption, silence, clipping, drawn
 text) plus Windows text-to-speech for the `speech` tests, so no test
 media is checked in. `eval/run_eval.py --runs 3` exercises the VLM lane
