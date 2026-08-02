@@ -13,6 +13,25 @@ Built for game/build QA — "is this capture smooth?", "did rendering
 break vs the golden frame?", "what does this clip actually show?" — at
 zero API cost, but nothing about it is game-specific.
 
+## Demo
+
+A checkout flow recorded by a test runner, analyzed by vidqa:
+
+![filmstrip of a checkout run — Payment failed at 8s, Order confirmed at 10.5s](docs/demo-strip.png)
+
+```sh
+$ vidqa strip run.mp4 --out sheet.png --every 1.5   # the image above
+
+$ vidqa when run.mp4 "Payment failed"               # when did the error show?
+{"first_s":8.0,"found":true,"intervals":[{"end_s":10.5,"start_s":8.0}],"mode":"text","query":"Payment failed","sampled":31,"step_s":0.5}
+
+$ vidqa shot run.mp4 --out evidence.png --at-text "Payment failed"
+{"at_s":8.25,"found":true,"height":800,"out":"evidence.png","query":"Payment failed","width":1280}
+
+$ vidqa ci run.mp4 --rules checkout.rules.json      # gate it in CI
+{"pass":true,"rules":[{"detail":{"first_s":10.5},"pass":true,"rule":{"by_s":15,"text":"Order confirmed","type":"expect_text"}},{"detail":{},"pass":true,"rule":{"type":"no_blank_frames"}}],"step_s":0.5}
+```
+
 ## Requirements
 
 - Python 3.11+
