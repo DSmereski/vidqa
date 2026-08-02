@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vidqa"
+name = "vidqa-cli"  # "vidqa" is taken on PyPI; module and CLI stay `vidqa`
 version = "0.1.0"
 description = "Local, deterministic video QA: frame timing, golden-frame diff, scene cuts. Compact JSON for agents."
 readme = "README.md"
