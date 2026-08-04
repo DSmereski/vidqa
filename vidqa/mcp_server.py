@@ -67,12 +67,32 @@ def when(path: str, text: str | None = None, template: str | None = None,
 @server.tool()
 def shot(path: str, out: str, at: float | None = None,
          at_text: str | None = None,
-         annotate: list[list] | None = None) -> dict:
-    """Extract a frame as PNG evidence; annotate = [[x,y,w,h] or [x,y,w,h,label], ...] boxes."""
+         annotate: list[list] | None = None,
+         around: float | None = None, gap: float = 0.5) -> dict:
+    """Extract a frame as PNG evidence (or a before/after pair via around);
+    annotate = [[x,y,w,h] or [x,y,w,h,label], ...] boxes."""
     from .shot import shot as impl
     if annotate is not None:
         annotate = [list(a) + [None] * (5 - len(a)) for a in annotate]
-    return impl(require_file(path), out, at=at, at_text=at_text, annotate=annotate)
+    return impl(require_file(path), out, at=at, at_text=at_text,
+                annotate=annotate, around=around, gap=gap)
+
+
+@server.tool()
+def locate(path: str, fail_text: str, step: float = 0.5,
+           shots: str | None = None) -> dict:
+    """Failure auto-locate: last-good + first-bad timestamps (and frames) from the fail text."""
+    from .locate import locate as impl
+    return impl(require_file(path), fail_text, step=step, shots=shots)
+
+
+@server.tool()
+def judge(path: str, rubric: str, model: str = MODEL_DEFAULT,
+          frames: int = FRAMES_DEFAULT) -> dict:
+    """Visual smoke review: enum verdicts on a UX rubric file via the local VLM."""
+    from .judge import judge as impl
+    return impl(require_file(path), require_file(rubric), model=model,
+                frames=frames)
 
 
 @server.tool()
@@ -129,21 +149,30 @@ def srt(path: str, out: str) -> dict:
 @server.tool()
 def rundiff(a: str, b: str, step: float = 0.5, threshold: int = 8,
             shots: str | None = None, ignore: list[list[int]] | None = None,
-            trace_a: str | None = None, trace_b: str | None = None) -> dict:
+            trace_a: str | None = None, trace_b: str | None = None,
+            md: str | None = None) -> dict:
     """Compare two runs of the same test: by clock, or by Playwright steps when traces given."""
     from .rundiff import rundiff as impl
     for tr in (trace_a, trace_b):
         if tr is not None:
             require_file(tr)
-    return impl(require_file(a), require_file(b), step=step, threshold=threshold,
-                shots=shots, ignore=ignore, trace_a=trace_a, trace_b=trace_b)
+    result = impl(require_file(a), require_file(b), step=step, threshold=threshold,
+                  shots=shots, ignore=ignore, trace_a=trace_a, trace_b=trace_b)
+    if md is not None:
+        from .md import rundiff_md
+        result["md"] = rundiff_md(md, result, a, b)
+    return result
 
 
 @server.tool()
-def ci(path: str, rules: str, step: float = 0.5) -> dict:
+def ci(path: str, rules: str, step: float = 0.5, md: str | None = None) -> dict:
     """Evaluate a QA rules file (expect/forbid text, templates, freezes, blanks) against a recording."""
     from .ci import ci as impl
-    return impl(require_file(path), require_file(rules), step=step)
+    result = impl(require_file(path), require_file(rules), step=step)
+    if md is not None:
+        from .md import ci_md
+        result["md"] = ci_md(md, result, path)
+    return result
 
 
 @server.tool()

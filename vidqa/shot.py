@@ -1,17 +1,22 @@
 """Extract a precise frame (optionally annotated/cropped) as PNG evidence."""
+import os
+
 import cv2
 
 from .diff import _imwrite_png, load_frame
 from .ffutil import ToolError, r4
 
 STEP_DEFAULT = 0.5
+GAP_DEFAULT = 0.5
 BOX_COLOR = (0, 0, 255)  # BGR red
 
 
 def shot(path, out, at=None, at_text=None, crop=None, step=STEP_DEFAULT,
-         annotate=None):
-    if (at is None) == (at_text is None):
-        raise ToolError("give exactly one of --at or --at-text")
+         annotate=None, around=None, gap=GAP_DEFAULT):
+    if sum(x is not None for x in (at, at_text, around)) != 1:
+        raise ToolError("give exactly one of --at, --at-text, or --around")
+    if around is not None:
+        return _pair(path, out, around, gap, annotate, crop)
     result = {"found": True, "out": out}
     if at_text is not None:
         from .when import when
@@ -20,7 +25,33 @@ def shot(path, out, at=None, at_text=None, crop=None, step=STEP_DEFAULT,
             return {"found": False, "out": None, "query": at_text}
         at = hit["first_s"] + step / 2  # land inside the visible interval
         result["query"] = at_text
-    img = load_frame(path, at)
+    img = _render(load_frame(path, at), annotate, crop, result)
+    _imwrite_png(out, img)
+    result.update({"at_s": r4(at), "width": img.shape[1], "height": img.shape[0]})
+    return result
+
+
+def _pair(path, out, around, gap, annotate, crop):
+    """Before/after evidence pair for "what changed" at a moment."""
+    if gap <= 0:
+        raise ToolError("--gap must be positive")
+    from .probe import probe
+    duration = probe(path)["duration_s"]
+    end = max(0.0, (duration if duration is not None else around) - 0.05)
+    result = {"found": True, "around_s": r4(around), "gap_s": r4(gap)}
+    root, ext = os.path.splitext(out)
+    for tag, t in (("before", max(0.0, around - gap)),
+                   ("after", min(end, around + gap))):
+        img = _render(load_frame(path, t), annotate, crop, result)
+        p = f"{root}_{tag}{ext or '.png'}"
+        _imwrite_png(p, img)
+        result[tag] = p
+        result[f"{tag}_s"] = r4(t)
+    result.update({"width": img.shape[1], "height": img.shape[0]})
+    return result
+
+
+def _render(img, annotate, crop, result):
     if annotate:  # video pixel space, drawn before any --crop
         for x, y, w, h, label in annotate:
             if w <= 0 or h <= 0 or x < 0 or y < 0 \
@@ -43,6 +74,4 @@ def shot(path, out, at=None, at_text=None, crop=None, step=STEP_DEFAULT,
                 f"--crop {x},{y},{w},{h} is outside the {img.shape[1]}x{img.shape[0]} frame"
             )
         img = img[y:y + h, x:x + w]
-    _imwrite_png(out, img)
-    result.update({"at_s": r4(at), "width": img.shape[1], "height": img.shape[0]})
-    return result
+    return img

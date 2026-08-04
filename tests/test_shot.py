@@ -60,6 +60,37 @@ def test_annotate_out_of_bounds_errors(media, tmp_path):
     assert proc.returncode == 2
 
 
+def test_around_writes_before_after_pair(media, tmp_path):
+    result = shot(str(media["cut"]), str(tmp_path / "pair.png"), around=1.0)
+    before, after = tmp_path / "pair_before.png", tmp_path / "pair_after.png"
+    assert before.exists() and after.exists()
+    assert result["found"] is True
+    assert result["before_s"] == 0.5 and result["after_s"] == 1.5
+    assert result["before"] == str(before) and result["after"] == str(after)
+    # cut switches red -> smpte bars at t=1, so the pair must differ
+    assert not np.array_equal(cv2.imread(str(before)), cv2.imread(str(after)))
+
+
+def test_around_clamps_to_video(media, tmp_path):
+    result = shot(str(media["clean"]), str(tmp_path / "p.png"), around=0.1)
+    assert result["before_s"] == 0.0
+    result = shot(str(media["clean"]), str(tmp_path / "q.png"), around=1.9)
+    assert 1.8 <= result["after_s"] <= 2.0  # clean is 2 s
+
+
+def test_around_crop_applies_to_both(media, tmp_path):
+    result = shot(str(media["clean"]), str(tmp_path / "c.png"), around=1.0,
+                  crop=[10, 20, 100, 50])
+    for p in (result["before"], result["after"]):
+        assert cv2.imread(p).shape[:2] == (50, 100)
+
+
+def test_around_excludes_at(media, tmp_path):
+    proc = run_cli("shot", str(media["clean"]), "--out", str(tmp_path / "x.png"),
+                   "--at", "1", "--around", "1")
+    assert proc.returncode == 2
+
+
 def test_at_text_missing_exits_1_and_writes_nothing(media, tmp_path):
     out = tmp_path / "no.png"
     proc = run_cli("shot", str(media["flash"]), "--out", str(out),

@@ -56,6 +56,22 @@ def main(argv=None):
     p.add_argument("--step", type=float, default=None, help="--at-text sample interval")
     p.add_argument("--annotate", action="append", default=None,
                    help="x,y,w,h[,label]: bake a labeled box into the shot; repeatable")
+    p.add_argument("--around", type=float, default=None,
+                   help="write a before/after pair around this timestamp instead")
+    p.add_argument("--gap", type=float, default=None,
+                   help="seconds each side of --around, default 0.5")
+
+    p = sub.add_parser("locate", help="failure auto-locate: last-good + first-bad frames from the fail text")
+    p.add_argument("video")
+    p.add_argument("text", help="failure text from the assertion / error UI")
+    p.add_argument("--step", type=float, default=None, help="sample interval s, default 0.5")
+    p.add_argument("--shots", default=None, help="dir to write last_good.png + first_bad.png")
+
+    p = sub.add_parser("judge", help="visual smoke review: enum verdicts on a UX rubric (local VLM)")
+    p.add_argument("video")
+    p.add_argument("--rubric", required=True, help="rubric json (see vidqa.judge docstring)")
+    p.add_argument("--model", default=None, help="default qwen3-vl:8b")
+    p.add_argument("--frames", type=int, default=None, help="default 6")
 
     p = sub.add_parser("text", help="index every text line the screen showed, with visibility intervals")
     p.add_argument("video")
@@ -102,6 +118,7 @@ def main(argv=None):
     p.add_argument("--step", type=float, default=None, help="sample interval s, default 0.5")
     p.add_argument("--threshold", type=int, default=None, help="pHash distance floor, default 8")
     p.add_argument("--shots", default=None, help="dir to write the first-divergence frame pair")
+    p.add_argument("--md", default=None, help="also write a PR-comment-ready markdown report here")
     p.add_argument("--ignore", action="append", default=None,
                    help="x,y,w,h region to exclude (clock, fps counter); repeatable")
     p.add_argument("--trace-a", default=None, help="Playwright trace for run a: align by steps, not clock")
@@ -111,6 +128,7 @@ def main(argv=None):
     p.add_argument("video")
     p.add_argument("--rules", required=True, help="rules json (see vidqa.ci docstring)")
     p.add_argument("--step", type=float, default=None, help="scan interval s, default 0.5")
+    p.add_argument("--md", default=None, help="also write a PR-comment-ready markdown report here")
 
     p = sub.add_parser("trace", help="Playwright trace.zip -> step timeline (+ frame at a step)")
     p.add_argument("tracezip")
@@ -211,9 +229,21 @@ def _dispatch(args):
         annotate = [_annot(a) for a in args.annotate] if args.annotate else None
         result = shot(
             args.video, args.out, at=args.at, at_text=args.at_text, crop=crop,
-            annotate=annotate, **_given(step=args.step),
+            annotate=annotate, around=args.around,
+            **_given(step=args.step, gap=args.gap),
         )
         return result, 0 if result["found"] else 1
+    if args.cmd == "locate":
+        from .locate import locate
+        result = locate(args.video, args.text, shots=args.shots,
+                        **_given(step=args.step))
+        return result, 0 if result["found"] else 1
+    if args.cmd == "judge":
+        from .judge import judge
+        require_file(args.rubric)
+        result = judge(args.video, args.rubric,
+                       **_given(model=args.model, frames=args.frames))
+        return result, 0 if result["pass"] else 1
     if args.cmd == "text":
         from .text import text
         result = text(args.video, contains=args.contains, **_given(step=args.step))
@@ -250,11 +280,17 @@ def _dispatch(args):
             trace_a=args.trace_a, trace_b=args.trace_b,
             **_given(step=args.step, threshold=args.threshold),
         )
+        if args.md is not None:
+            from .md import rundiff_md
+            result["md"] = rundiff_md(args.md, result, args.a, args.b)
         return result, 1 if result["diverged"] else 0
     if args.cmd == "ci":
         from .ci import ci
         require_file(args.rules)
         result = ci(args.video, args.rules, **_given(step=args.step))
+        if args.md is not None:
+            from .md import ci_md
+            result["md"] = ci_md(args.md, result, args.video)
         return result, 0 if result["pass"] else 1
     if args.cmd == "trace":
         from .trace import trace
