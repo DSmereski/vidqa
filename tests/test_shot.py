@@ -91,6 +91,46 @@ def test_around_excludes_at(media, tmp_path):
     assert proc.returncode == 2
 
 
+def _static_change_video(media, tmp_path):
+    """1 s of golden, then 1 s of corrupt (magenta box at 200,150,80,60)."""
+    out = tmp_path / "staticchange.mp4"
+    subprocess.run(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+         "-loop", "1", "-t", "1", "-i", str(media["golden"]),
+         "-loop", "1", "-t", "1", "-i", str(media["corrupt"]),
+         "-filter_complex", "[0:v][1:v]concat=n=2:v=1:a=0,fps=25[out]",
+         "-map", "[out]", "-c:v", "libx264", "-qp", "0",
+         "-pix_fmt", "yuv420p", str(out)], check=True)
+    return str(out)
+
+
+def test_zoom_crops_pair_to_changed_region(media, tmp_path):
+    video = _static_change_video(media, tmp_path)
+    result = shot(video, str(tmp_path / "z.png"), around=1.0, zoom=True)
+    x, y, w, h = result["zoom"]
+    # must contain the magenta box (200,150,80,60) and stay well under full frame
+    assert x <= 200 and y <= 150 and x + w >= 280 and y + h >= 210
+    assert w < 320 - 50 and h < 240 - 50
+    for p in (result["before"], result["after"]):
+        assert cv2.imread(p).shape[:2] == (h, w)
+
+
+def test_zoom_with_no_change_writes_full_frames(media, tmp_path):
+    result = shot(str(media["red"]), str(tmp_path / "n.png"),
+                  around=1.0, zoom=True)
+    assert result["zoom"] is None
+    assert cv2.imread(result["before"]).shape[:2] == (240, 320)
+
+
+def test_zoom_conflicts_are_errors(media, tmp_path):
+    proc = run_cli("shot", str(media["clean"]), "--out", str(tmp_path / "x.png"),
+                   "--around", "1", "--zoom", "--crop", "0,0,50,50")
+    assert proc.returncode == 2
+    proc = run_cli("shot", str(media["clean"]), "--out", str(tmp_path / "x.png"),
+                   "--at", "1", "--zoom")
+    assert proc.returncode == 2
+
+
 def test_at_text_missing_exits_1_and_writes_nothing(media, tmp_path):
     out = tmp_path / "no.png"
     proc = run_cli("shot", str(media["flash"]), "--out", str(out),

@@ -68,14 +68,30 @@ def when(path: str, text: str | None = None, template: str | None = None,
 def shot(path: str, out: str, at: float | None = None,
          at_text: str | None = None,
          annotate: list[list] | None = None,
-         around: float | None = None, gap: float = 0.5) -> dict:
-    """Extract a frame as PNG evidence (or a before/after pair via around);
-    annotate = [[x,y,w,h] or [x,y,w,h,label], ...] boxes."""
+         around: float | None = None, gap: float = 0.5,
+         zoom: bool = False) -> dict:
+    """Extract a frame as PNG evidence (or a before/after pair via around;
+    zoom crops the pair to what changed); annotate = [[x,y,w,h] or
+    [x,y,w,h,label], ...] boxes."""
     from .shot import shot as impl
     if annotate is not None:
         annotate = [list(a) + [None] * (5 - len(a)) for a in annotate]
     return impl(require_file(path), out, at=at, at_text=at_text,
-                annotate=annotate, around=around, gap=gap)
+                annotate=annotate, around=around, gap=gap, zoom=zoom)
+
+
+@server.tool()
+def moments(path: str, text: str | None = None, step: float = 0.5) -> dict:
+    """Auto-index chapter markers: freezes, stutter, cuts, blanks, silences (+ a text's first/last)."""
+    from .moments import moments as impl
+    return impl(require_file(path), text=text, step=step)
+
+
+@server.tool()
+def contrast(path: str, at: float | None = None, min_ratio: float = 4.5) -> dict:
+    """Flag low-contrast on-screen text (WCAG-approx accessibility probe)."""
+    from .contrast import contrast as impl
+    return impl(require_file(path), at=at, min_ratio=min_ratio)
 
 
 @server.tool()
@@ -200,10 +216,11 @@ def live(process: str, seconds: int = 10) -> dict:
 
 
 @server.tool()
-def speech(path: str, model: str = SPEECH_MODEL_DEFAULT, full: bool = False) -> dict:
-    """Transcribe spoken audio in a video (faster-whisper, local CPU)."""
+def speech(path: str, model: str = SPEECH_MODEL_DEFAULT, full: bool = False,
+           find: str | None = None) -> dict:
+    """Transcribe spoken audio (faster-whisper, local CPU); find = phrase to timestamp."""
     from .speech import speech as impl
-    return impl(require_file(path), model=model, full=full)
+    return impl(require_file(path), model=model, full=full, find=find)
 
 
 @server.tool()

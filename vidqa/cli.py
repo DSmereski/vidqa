@@ -60,6 +60,18 @@ def main(argv=None):
                    help="write a before/after pair around this timestamp instead")
     p.add_argument("--gap", type=float, default=None,
                    help="seconds each side of --around, default 0.5")
+    p.add_argument("--zoom", action="store_true",
+                   help="with --around: crop both frames to the region that changed")
+
+    p = sub.add_parser("moments", help="auto-index chapter markers: freezes, cuts, blanks, silences (+ a text's first/last)")
+    p.add_argument("video")
+    p.add_argument("--text", default=None, help="also mark where this text first/last appears")
+    p.add_argument("--step", type=float, default=None, help="blank/text sample interval s, default 0.5")
+
+    p = sub.add_parser("contrast", help="flag low-contrast on-screen text (WCAG-approx accessibility probe)")
+    p.add_argument("video")
+    p.add_argument("--at", type=float, default=None)
+    p.add_argument("--min-ratio", type=float, default=None, help="contrast floor, default 4.5 (WCAG AA)")
 
     p = sub.add_parser("locate", help="failure auto-locate: last-good + first-bad frames from the fail text")
     p.add_argument("video")
@@ -148,6 +160,8 @@ def main(argv=None):
     p.add_argument("--model", default=None, help="default large-v3-turbo; tiny/base are faster")
     p.add_argument("--expect", default=None,
                    help="exit 1 unless the transcript contains this (case-insensitive)")
+    p.add_argument("--find", default=None,
+                   help="timestamps of segments containing this phrase; exit 1 if none")
     p.add_argument("--full", action="store_true", help="include segments, no text cap")
 
     p = sub.add_parser("ocr", help="read text off a frame")
@@ -229,10 +243,18 @@ def _dispatch(args):
         annotate = [_annot(a) for a in args.annotate] if args.annotate else None
         result = shot(
             args.video, args.out, at=args.at, at_text=args.at_text, crop=crop,
-            annotate=annotate, around=args.around,
+            annotate=annotate, around=args.around, zoom=args.zoom,
             **_given(step=args.step, gap=args.gap),
         )
         return result, 0 if result["found"] else 1
+    if args.cmd == "moments":
+        from .moments import moments
+        return moments(args.video, text=args.text, **_given(step=args.step)), 0
+    if args.cmd == "contrast":
+        from .contrast import contrast
+        result = contrast(args.video, at=args.at,
+                          **_given(min_ratio=args.min_ratio))
+        return result, 0 if result["pass"] else 1
     if args.cmd == "locate":
         from .locate import locate
         result = locate(args.video, args.text, shots=args.shots,
@@ -305,10 +327,11 @@ def _dispatch(args):
     if args.cmd == "speech":
         from .speech import speech
         result = speech(
-            args.video, expect=args.expect, full=args.full,
+            args.video, expect=args.expect, full=args.full, find=args.find,
             **_given(model=args.model),
         )
-        return result, 0 if result.get("expect_found", True) else 1
+        ok = result.get("expect_found", True) and result.get("find_found", True)
+        return result, 0 if ok else 1
     if args.cmd == "ocr":
         from .ocr import ocr
         return ocr(args.video, at=args.at), 0

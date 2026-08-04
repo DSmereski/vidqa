@@ -63,13 +63,15 @@ python -m venv .venv
 | `vidqa diff <cand> --golden ref [--at t] [--mask-out m.png] [--ignore x,y,w,h]` | Golden-frame gate: SSIM floor + 8×8-grid worst-cell error + pHash scene check; `--ignore` excludes dynamic regions (clock, fps counter). |
 | `vidqa scenes <video>` | Scene-cut timestamps. |
 | `vidqa audio <video>` | Silences, clipping, volume levels. |
-| `vidqa speech <video> [--expect "phrase"]` | Transcribe spoken audio (faster-whisper, local CPU); `--expect` gates on a substring. |
+| `vidqa speech <video> [--expect "phrase"] [--find "phrase"]` | Transcribe spoken audio (faster-whisper, local CPU); `--expect` gates on a substring, `--find` returns the timestamps where a phrase was spoken. |
 | `vidqa ocr <video\|image> [--at t]` | Read on-screen text (RapidOCR, CPU, offline after first model download). |
 | `vidqa find <video\|image> --template t.png [--at t]` | Locate a known UI element; exit 1 if absent. |
 | `vidqa ask <video> "question" [--enum a,b,c] [--expect a]` | Local-VLM Q&A; `--expect` turns it into a gate. |
 | `vidqa live <process.exe> [--seconds 10]` | Real frametimes of a *running* app via PresentMon ETW (Windows). |
 | `vidqa when <video> "text" [--template el.png]` | *When* text or an element is visible: intervals in seconds; exit 1 if never. |
-| `vidqa shot <video> --out f.png --at 12.5 \| --at-text "Error" \| --around 12.5 [--crop x,y,w,h] [--annotate x,y,w,h,label]` | Precise frame evidence, by timestamp or by visible text; `--around` writes a before/after pair; bake labeled boxes in. |
+| `vidqa shot <video> --out f.png --at 12.5 \| --at-text "Error" \| --around 12.5 [--zoom] [--crop x,y,w,h] [--annotate x,y,w,h,label]` | Precise frame evidence, by timestamp or by visible text; `--around` writes a before/after pair, `--zoom` crops it to what actually changed; bake labeled boxes in. |
+| `vidqa moments <video> [--text q]` | Auto-index a recording into chapter markers — freezes, stutter, cuts, blanks, silences, and where a text first/last appears — so nobody scrubs blind. |
+| `vidqa contrast <video\|image> [--at t] [--min-ratio 4.5]` | Flag low-contrast on-screen text (WCAG-approx accessibility probe); exit 1 when anything falls below the floor. |
 | `vidqa locate <video> "fail text" [--shots dir]` | Failure auto-locate: feed it the assertion/error text → last-good and first-bad timestamps + the exact frames. |
 | `vidqa judge <video> --rubric rubric.json` | Visual smoke review: a UX checklist judged by the local VLM, one enum verdict per item; exit 1 if any fail. |
 | `vidqa text <video> [--contains q]` | Everything the screen ever said: every text line with visibility intervals; short-lived toasts/snackbars flagged. |
@@ -160,7 +162,7 @@ the "Performance Log Users" group and sign back in.
 .venv/Scripts/python -m pytest -q
 ```
 
-130 tests; fixtures are synthesized on the fly with ffmpeg (injected
+146 tests; fixtures are synthesized on the fly with ffmpeg (injected
 freezes, dropped frames, seeded corruption, silence, clipping, drawn
 text) plus Windows text-to-speech for the `speech` tests, so no test
 media is checked in. `eval/run_eval.py --runs 3` exercises the VLM lane

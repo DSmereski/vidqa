@@ -8,7 +8,10 @@ MODEL_DEFAULT = "large-v3-turbo"
 TEXT_CAP = 3500
 
 
-def speech(path, model=MODEL_DEFAULT, expect=None, full=False):
+FIND_CAP = 20
+
+
+def speech(path, model=MODEL_DEFAULT, expect=None, full=False, find=None):
     try:
         from faster_whisper import WhisperModel
     except ImportError:
@@ -43,6 +46,10 @@ def speech(path, model=MODEL_DEFAULT, expect=None, full=False):
     }
     if expect is not None:
         out["expect_found"] = expect.lower() in text.lower()
+    if find is not None:
+        matches = [s for s in segs if find.lower() in s["text"].lower()]
+        out["find_matches"] = matches[:FIND_CAP]
+        out["find_found"] = bool(matches)
     if full:
         out["segments"] = segs
     return out

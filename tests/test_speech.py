@@ -61,6 +61,17 @@ def test_expect_substring_gate(spoken):
     assert json.loads(bad.stdout)["expect_found"] is False
 
 
+def test_find_returns_timestamped_matches(spoken):
+    ok = run_cli("speech", str(spoken), "--model", "tiny", "--find", "brown fox")
+    assert ok.returncode == 0, ok.stderr
+    out = json.loads(ok.stdout)
+    assert out["find_found"] is True
+    assert out["find_matches"] and {"start", "end", "text"} <= set(out["find_matches"][0])
+    bad = run_cli("speech", str(spoken), "--model", "tiny", "--find", "purple zebra")
+    assert bad.returncode == 1
+    assert json.loads(bad.stdout)["find_matches"] == []
+
+
 def test_full_includes_segments(spoken):
     proc = run_cli("speech", str(spoken), "--model", "tiny", "--full")
     assert proc.returncode == 0, proc.stderr
