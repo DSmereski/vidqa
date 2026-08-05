@@ -33,11 +33,47 @@ def pair(tmp_path_factory):
     return {"a": a, "b": b}
 
 
+@pytest.fixture(scope="module")
+def hue_pair(tmp_path_factory):
+    """Same dark page, but the status panel is green in a / red in b at a
+    matched gray value (37 vs 33) — invisible to grayscale pHash/SSIM."""
+    root = tmp_path_factory.mktemp("hue")
+
+    def panel(color, out):
+        subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+             "-f", "lavfi", "-i", "color=c=0x12141a:duration=2:size=320x240:rate=25",
+             "-vf", f"drawbox=x=80:y=60:w=160:h=120:color={color}@1:t=fill",
+             "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p", str(out)],
+            check=True)
+        return out
+
+    return {"green": panel("0x12301e", root / "green.mp4"),
+            "red": panel("0x4a1010", root / "red.mp4")}
+
+
 def test_same_file_never_diverges(media):
     result = rundiff(str(media["clean"]), str(media["clean"]))
     assert result["diverged"] is False
     assert result["first_divergence_s"] is None
     assert result["mean_distance"] == 0.0
+
+
+def test_hue_swap_caught_by_color_not_phash(hue_pair):
+    result = rundiff(str(hue_pair["green"]), str(hue_pair["red"]))
+    assert result["diverged"] is True
+    first = result["divergences"][0]
+    assert first["color_gap"] > result["color_threshold"]
+    assert first["distance"] <= result["threshold"]  # pHash alone misses it
+
+
+def test_hue_swap_caught_in_step_mode(hue_pair, tmp_path):
+    ta = step_trace(tmp_path / "a.zip", [("goto", 1.0)])
+    tb = step_trace(tmp_path / "b.zip", [("goto", 1.0)])
+    result = rundiff(str(hue_pair["green"]), str(hue_pair["red"]),
+                     trace_a=ta, trace_b=tb)
+    assert result["diverged"] is True
+    assert result["steps"][0]["color_gap"] > result["color_threshold"]
 
 
 def test_divergence_located_and_gated(pair, tmp_path):

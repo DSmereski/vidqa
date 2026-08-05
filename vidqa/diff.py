@@ -3,7 +3,9 @@
 Two-tier tolerance (the pattern proven by Unity/Unreal screenshot gates):
 a global SSIM floor AND a worst-cell local check on an 8x8 grid, so localized
 breakage can't hide inside a good global average. pHash answers the cheaper
-question "is this even the same scene?" first.
+question "is this even the same scene?" first. The worst-cell check runs on
+color: SSIM and pHash are grayscale, and a luma-matched hue swap (a green
+panel turning red) is invisible to both.
 """
 import os
 import tempfile
@@ -45,10 +47,12 @@ def diff(candidate, golden, at=None, mask_out=None,
     if ignore:
         zero_rects(ga, ignore)
         zero_rects(gb, ignore)
+        zero_rects(img, ignore)
+        zero_rects(ref, ignore)
         result["ignored"] = [list(r) for r in ignore]
     ph = int(np.count_nonzero(_phash(ga) != _phash(gb)))
     score = _ssim(ga.astype(np.float64), gb.astype(np.float64))
-    cell_val, (row, col) = _worst_cell(ga, gb)
+    cell_val, (row, col) = _worst_cell(img, ref)
     result.update({
         "pass": bool(score >= ssim_min and cell_val <= cell_max),
         "ssim": r4(score),
@@ -57,7 +61,7 @@ def diff(candidate, golden, at=None, mask_out=None,
         "worst_cell": {"mad": r4(cell_val), "row": row, "col": col},
     })
     if mask_out:
-        delta = cv2.absdiff(ga, gb)
+        delta = cv2.absdiff(img, ref).max(axis=2)
         mask = np.where(delta > MASK_PIXEL_DELTA, 255, 0).astype(np.uint8)
         _imwrite_png(mask_out, mask)
         result["mask"] = mask_out
@@ -125,6 +129,17 @@ def _phash(gray):
     return coeffs > np.median(coeffs)
 
 
+COLOR_CELLS = (16, 9)  # (w, h) grid of mean-color cells
+
+
+def color_sig(img):
+    """Per-cell mean color (BGR int16). Catches luma-matched hue swaps that
+    grayscale pHash/SSIM cannot see: measured on real Playwright runs, a
+    green->red panel of equal gray value moves a cell 45 units while
+    run-to-run jitter (spinners, text anti-aliasing) moves at most 3."""
+    return cv2.resize(img, COLOR_CELLS, interpolation=cv2.INTER_AREA).astype(np.int16)
+
+
 def _ssim(a, b):
     c1, c2 = (0.01 * 255) ** 2, (0.03 * 255) ** 2
     kernel = cv2.getGaussianKernel(11, 1.5)
@@ -144,6 +159,8 @@ def _ssim(a, b):
 
 def _worst_cell(a, b):
     delta = cv2.absdiff(a, b).astype(np.float64)
+    if delta.ndim == 3:
+        delta = delta.max(axis=2)
     h, w = delta.shape
     worst, where = -1.0, (0, 0)
     for row in range(GRID):

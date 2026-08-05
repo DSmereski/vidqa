@@ -68,7 +68,7 @@ python -m venv .venv
 | `vidqa report <video> [--golden ref --at t]` | One-call verdict: probe + timing + scenes (+ audio, + golden diff). Start here. |
 | `vidqa probe <video>` | Streams, resolution, duration, CFR/VFR. |
 | `vidqa timing <video>` | Stutter, duplicate frames, freezes; frame-time p50/p95/p99. |
-| `vidqa diff <cand> --golden ref [--at t] [--mask-out m.png] [--ignore x,y,w,h]` | Golden-frame gate: SSIM floor + 8×8-grid worst-cell error + pHash scene check; `--ignore` excludes dynamic regions (clock, fps counter). |
+| `vidqa diff <cand> --golden ref [--at t] [--mask-out m.png] [--ignore x,y,w,h]` | Golden-frame gate: SSIM floor + 8×8-grid worst-cell **color** error + pHash scene check; `--ignore` excludes dynamic regions (clock, fps counter). |
 | `vidqa scenes <video>` | Scene-cut timestamps. |
 | `vidqa audio <video>` | Silences, clipping, volume levels. |
 | `vidqa speech <video> [--expect "phrase"] [--find "phrase"]` | Transcribe spoken audio (faster-whisper, local CPU); `--expect` gates on a substring, `--find` returns the timestamps where a phrase was spoken. |
@@ -81,7 +81,7 @@ python -m venv .venv
 | `vidqa moments <video> [--text q]` | Auto-index a recording into chapter markers — freezes, stutter, cuts, blanks, silences, and where a text first/last appears — so nobody scrubs blind. |
 | `vidqa contrast <video\|image> [--at t] [--min-ratio 4.5]` | Flag low-contrast on-screen text (WCAG-approx accessibility probe); exit 1 when anything falls below the floor. |
 | `vidqa locate <video> "fail text" [--shots dir]` | Failure auto-locate: feed it the assertion/error text → last-good and first-bad timestamps + the exact frames. |
-| `vidqa judge <video> --rubric rubric.json` | Visual smoke review: a UX checklist judged by the local VLM, one enum verdict per item; exit 1 if any fail. |
+| `vidqa judge <video> --rubric rubric.json` | Visual smoke review: a UX checklist judged by the local VLM, one enum verdict per item; exit 1 if any fail. Judges persistent qualities (theme, layout, end state) — a briefly flashed message belongs to `when`/`locate`. |
 | `vidqa text <video> [--contains q]` | Everything the screen ever said: every text line with visibility intervals; short-lived toasts/snackbars flagged. |
 | `vidqa redact <video> --out safe.mp4 --region x,y,w,h` | Black out regions (PII, tokens) — solid fill, not reversible blur — so a recording can be shared. |
 | `vidqa strip <video> --out sheet.png [--every 1]` | Filmstrip contact sheet: the whole run as one timestamped thumbnail grid. |
@@ -92,7 +92,7 @@ python -m venv .venv
 | `vidqa load <video> [--content-by S] [--settled-by S]` | Perceived loading from video alone: time to first content + visual settle; deadlines gate. |
 | `vidqa bugpack <video> --at T --out dir` | Ticket-ready evidence folder: frame, ±3s clip, event track, report JSON, summary.md with OCR. |
 | `vidqa srt <video> --out events.srt` | Detected events (freezes, stutter, cuts, silences) as a subtitle track — any player shows the analysis on the scrubber. |
-| `vidqa rundiff <a> <b> [--shots dir] [--ignore x,y,w,h] [--trace-a a.zip --trace-b b.zip] [--md report.md]` | Where two runs of the same test diverge: by clock, or aligned by Playwright steps when traces are given; exit 1 on divergence. |
+| `vidqa rundiff <a> <b> [--shots dir] [--ignore x,y,w,h] [--trace-a a.zip --trace-b b.zip] [--md report.md]` | Where two runs of the same test diverge: by clock, or aligned by Playwright steps when traces are given. Compares structure (pHash) *and* color, so a wrong-colored panel can't hide; exit 1 on divergence. |
 
 Example:
 
@@ -116,6 +116,16 @@ vidqa shot run.webm --out evidence.png --at-text "Payment failed"
 vidqa strip run.webm --out sheet.png                      # whole run at a glance
 vidqa ci run.webm --rules checkout.rules.json             # gate it in CI
 ```
+
+Automated runners move fast: a state a human would watch for seconds can
+be on screen for under half a second, because the next click fires the
+moment the assertion resolves (measured on real Playwright runs: an
+error panel visible for 0.36 s). When gating on such flashes, tighten
+the sampling with `--step 0.25`. Also, the recording starts at the first
+painted frame — a form the test fills instantly may barely appear in the
+video at all. The video is evidence of what happened after the page
+rendered; VLM rubrics (`judge`) should ask about the states that
+dominate it, not about flashes.
 
 A rules file turns a recording into a pass/fail check:
 
@@ -170,7 +180,7 @@ the "Performance Log Users" group and sign back in.
 .venv/Scripts/python -m pytest -q
 ```
 
-146 tests; fixtures are synthesized on the fly with ffmpeg (injected
+149 tests; fixtures are synthesized on the fly with ffmpeg (injected
 freezes, dropped frames, seeded corruption, silence, clipping, drawn
 text) plus Windows text-to-speech for the `speech` tests, so no test
 media is checked in. `eval/run_eval.py --runs 3` exercises the VLM lane

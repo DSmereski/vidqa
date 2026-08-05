@@ -1,8 +1,9 @@
 """Where do two recordings of the same test diverge?
 
 Start-aligned sampling of both runs, per-pair pHash hamming distance
-(resolution-robust, compression-tolerant). Divergence = distance above
-the same-scene threshold diff.py already uses.
+(resolution-robust, compression-tolerant) plus a mean-color-cell gap,
+because pHash is grayscale and blind to luma-matched hue swaps.
+Divergence = either measure above its threshold.
 """
 import os
 import tempfile
@@ -10,13 +11,15 @@ import tempfile
 import cv2
 import numpy as np
 
-from .diff import _imwrite_png, _phash, load_frame, zero_rects
+from .diff import _imwrite_png, _phash, color_sig, load_frame, zero_rects
 from .ffutil import ToolError, r4, run
 
 STEP_DEFAULT = 0.5
 # same-content re-encodes measure 0-2 bits apart; real UI changes 10+.
 # (diff.py's 20 answers "different scene entirely" — too lax for run-to-run.)
 THRESHOLD_DEFAULT = 8
+# measured on real Playwright reruns: jitter <=3, luma-matched hue swap 45.
+COLOR_GAP_MAX = 20
 DIVERGENCE_CAP = 50
 SAMPLE_WIDTH = 256
 
@@ -29,18 +32,21 @@ def rundiff(a, b, step=STEP_DEFAULT, threshold=THRESHOLD_DEFAULT, shots=None,
         raise ToolError("--trace-a and --trace-b go together")
     if trace_a is not None:
         return _step_diff(a, b, trace_a, trace_b, threshold, ignore, shots)
-    ha = _hashes(a, step, ignore)
-    hb = _hashes(b, step, ignore)
-    n = min(len(ha), len(hb))
-    distances = [int(np.count_nonzero(ha[i] != hb[i])) for i in range(n)]
-    over = [{"at_s": r4(i * step), "distance": distances[i]}
-            for i in range(n) if distances[i] > threshold]
+    sa = _samples(a, step, ignore)
+    sb = _samples(b, step, ignore)
+    n = min(len(sa), len(sb))
+    distances = [int(np.count_nonzero(sa[i][0] != sb[i][0])) for i in range(n)]
+    gaps = [int(np.abs(sa[i][1] - sb[i][1]).max()) for i in range(n)]
+    over = [{"at_s": r4(i * step), "color_gap": gaps[i], "distance": distances[i]}
+            for i in range(n)
+            if distances[i] > threshold or gaps[i] > COLOR_GAP_MAX]
     first = over[0]["at_s"] if over else None
     result = {
+        "color_threshold": COLOR_GAP_MAX,
         "diverged": bool(over),
         "divergences": over[:DIVERGENCE_CAP],
-        "duration_a_s": r4(len(ha) * step),
-        "duration_b_s": r4(len(hb) * step),
+        "duration_a_s": r4(len(sa) * step),
+        "duration_b_s": r4(len(sb) * step),
         "first_divergence_s": first,
         "mean_distance": r4(sum(distances) / n),
         "sampled": n,
@@ -60,8 +66,9 @@ def rundiff(a, b, step=STEP_DEFAULT, threshold=THRESHOLD_DEFAULT, shots=None,
     return result
 
 
-def _hashes(path, step, ignore=None):
-    hashes = []
+def _samples(path, step, ignore=None):
+    """Per-sample (phash, color_sig) pairs."""
+    samples = []
     scaled = None
     with tempfile.TemporaryDirectory() as td:
         run(["ffmpeg", "-hide_banner", "-loglevel", "error",
@@ -71,13 +78,14 @@ def _hashes(path, step, ignore=None):
         if not names:
             raise ToolError(f"no frames sampled from {path}")
         for name in names:
-            gray = cv2.cvtColor(cv2.imread(os.path.join(td, name)), cv2.COLOR_BGR2GRAY)
+            img = cv2.imread(os.path.join(td, name))
             if ignore:
                 if scaled is None:
-                    scaled = _scale_rects(ignore, path, gray.shape)
-                zero_rects(gray, scaled)
-            hashes.append(_phash(gray))
-    return hashes
+                    scaled = _scale_rects(ignore, path, img.shape)
+                zero_rects(img, scaled)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            samples.append((_phash(gray), color_sig(img)))
+    return samples
 
 
 def _scale_rects(rects, path, sample_shape):
@@ -106,13 +114,16 @@ def _step_diff(a, b, trace_a, trace_b, threshold, ignore, shots):
         if sa[i]["title"] != sb[i]["title"]:
             mismatch = {"index": i, "a": sa[i]["title"], "b": sb[i]["title"]}
             break
-        d = int(np.count_nonzero(
-            _step_hash(a, sa[i]["end_s"], ignore) != _step_hash(b, sb[i]["end_s"], ignore)))
+        pha, siga = _step_sample(a, sa[i]["end_s"], ignore)
+        phb, sigb = _step_sample(b, sb[i]["end_s"], ignore)
+        d = int(np.count_nonzero(pha != phb))
+        g = int(np.abs(siga - sigb).max())
         entry = {
             "a_s": sa[i]["end_s"],
             "b_s": sb[i]["end_s"],
+            "color_gap": g,
             "distance": d,
-            "diverged": bool(d > threshold),
+            "diverged": bool(d > threshold or g > COLOR_GAP_MAX),
             "title": sa[i]["title"],
         }
         steps.append(entry)
@@ -120,6 +131,7 @@ def _step_diff(a, b, trace_a, trace_b, threshold, ignore, shots):
             first = entry
     diverged = bool(first) or mismatch is not None or len(sa) != len(sb)
     result = {
+        "color_threshold": COLOR_GAP_MAX,
         "diverged": diverged,
         "first_divergent_step": first["title"] if first else None,
         "mode": "steps",
@@ -142,11 +154,12 @@ def _step_diff(a, b, trace_a, trace_b, threshold, ignore, shots):
     return result
 
 
-def _step_hash(path, at, ignore):
-    gray = cv2.cvtColor(load_frame(path, _clamped(path, at)), cv2.COLOR_BGR2GRAY)
+def _step_sample(path, at, ignore):
+    img = load_frame(path, _clamped(path, at))
     if ignore:
-        zero_rects(gray, ignore)
-    return _phash(gray)
+        zero_rects(img, ignore)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    return _phash(gray), color_sig(img)
 
 
 def _clamped(path, at):

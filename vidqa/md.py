@@ -47,11 +47,12 @@ def rundiff_md(out, result, a, b):
             m = result["step_mismatch"]
             lines.append(f"- step sequence mismatch at #{m['index']}: "
                          f"`{_cell(m['a'])}` vs `{_cell(m['b'])}`")
-        lines += ["", "| step | a_s | b_s | distance | diverged |", "|---|---|---|---|---|"]
+        lines += ["", "| step | a_s | b_s | distance | color_gap | diverged |",
+                  "|---|---|---|---|---|---|"]
         for s in result["steps"]:
             mark = "❌" if s["diverged"] else "✅"
             lines.append(f"| {_cell(s['title'])} | {s['a_s']} | {s['b_s']} "
-                         f"| {s['distance']} | {mark} |")
+                         f"| {s['distance']} | {s['color_gap']} | {mark} |")
     else:
         first = result["first_divergence_s"]
         lines.append(f"- first divergence: "
@@ -60,8 +61,8 @@ def rundiff_md(out, result, a, b):
                      f"threshold {result['threshold']}, "
                      f"mean distance {result['mean_distance']}")
         if result["divergences"]:
-            lines += ["", "| at_s | distance |", "|---|---|"]
-            lines += [f"| {d['at_s']} | {d['distance']} |"
+            lines += ["", "| at_s | distance | color_gap |", "|---|---|---|"]
+            lines += [f"| {d['at_s']} | {d['distance']} | {d['color_gap']} |"
                       for d in result["divergences"]]
     if result.get("shots"):
         lines.append("")

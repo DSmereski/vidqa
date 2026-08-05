@@ -1,4 +1,5 @@
 import shutil
+import subprocess
 
 import pytest
 
@@ -12,6 +13,26 @@ def test_identical_frames_pass(media):
     assert result["ssim"] >= 0.999
     assert result["phash_distance"] == 0
     assert result["scene_match"] is True
+
+
+def test_hue_swap_fails_via_color_worst_cell(tmp_path):
+    """Green panel vs red panel at matched gray value: SSIM and pHash are
+    grayscale and blind to it — only the color worst-cell catches it."""
+    def frame(color, out):
+        subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+             "-f", "lavfi", "-i", "color=c=0x12141a:duration=0.1:size=320x240:rate=25",
+             "-vf", f"drawbox=x=80:y=60:w=160:h=120:color={color}@1:t=fill",
+             "-frames:v", "1", str(out)], check=True)
+        return out
+
+    green = frame("0x12301e", tmp_path / "green.png")
+    red = frame("0x4a1010", tmp_path / "red.png")
+    result = diff(str(red), str(green))
+    assert result["pass"] is False
+    assert result["worst_cell"]["mad"] > 25.0
+    assert result["ssim"] >= 0.95          # grayscale SSIM misses it
+    assert result["phash_distance"] <= 8   # pHash misses it too
 
 
 def test_corrupt_region_fails_and_is_located(media):
