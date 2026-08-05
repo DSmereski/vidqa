@@ -41,10 +41,18 @@ $ vidqa ci run.mp4 --rules checkout.rules.json      # gate it in CI
   (default `qwen3-vl:8b`)
 - Optional, for `live` (Windows only): Intel PresentMon — a copy is
   bundled in `tools/`
-- Optional, for `speech`: faster-whisper (`pip install vidqa[speech]`;
+- Optional, for `speech`: faster-whisper (`pip install vidqa-cli[speech]`;
   runs on CPU, model downloads on first use)
 
 ## Install
+
+```sh
+pip install vidqa-cli
+```
+
+(The PyPI name is `vidqa-cli`; the module and the command are both `vidqa`.)
+
+From source, for development:
 
 ```sh
 git clone https://github.com/DSmereski/vidqa
