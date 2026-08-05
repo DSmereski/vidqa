@@ -14,13 +14,15 @@ def _engine():
         from rapidocr import RapidOCR
         # rapidocr re-forces its logger to INFO on every internal Logger()
         # construction, so a plain setLevel doesn't stick — gate globally
-        # while the engine builds, then pin the logger to WARNING.
+        # while the engine builds, then pin the logger. ERROR, not WARNING:
+        # rapidocr warns on every textless frame ("text detection result is
+        # empty"), which is a routine outcome here, not a problem.
         logging.disable(logging.INFO)
         try:
             _ENGINE = RapidOCR()
         finally:
             logging.disable(logging.NOTSET)
-        logging.getLogger("RapidOCR").setLevel(logging.WARNING)
+        logging.getLogger("RapidOCR").setLevel(logging.ERROR)
     return _ENGINE
 
 
