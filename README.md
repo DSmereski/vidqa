@@ -134,7 +134,7 @@ A rules file turns a recording into a pass/fail check:
   {"type": "expect_text", "text": "Order confirmed", "by_s": 20},
   {"type": "forbid_text", "builtin": "error_pages"},
   {"type": "max_freeze_s", "seconds": 3},
-  {"type": "no_blank_frames"}
+  {"type": "no_blank_frames", "after_s": 5}
 ]}
 ```
 
@@ -180,7 +180,7 @@ the "Performance Log Users" group and sign back in.
 .venv/Scripts/python -m pytest -q
 ```
 
-150 tests; fixtures are synthesized on the fly with ffmpeg (injected
+151 tests; fixtures are synthesized on the fly with ffmpeg (injected
 freezes, dropped frames, seeded corruption, silence, clipping, drawn
 text) plus Windows text-to-speech for the `speech` tests, so no test
 media is checked in. `eval/run_eval.py --runs 3` exercises the VLM lane

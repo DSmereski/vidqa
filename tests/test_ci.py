@@ -72,6 +72,29 @@ def test_blank_frames_fail(media, tmp_path):
     assert ci(str(media["clean"]), rules)["pass"] is True
 
 
+@pytest.fixture(scope="module")
+def blank_then_content(tmp_path_factory):
+    """1 s of black then normal content — a page-load style opening."""
+    clip = tmp_path_factory.mktemp("ci_load") / "load.mp4"
+    subprocess.run(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+         "-f", "lavfi", "-i", "testsrc2=duration=2.5:size=320x240:rate=25",
+         "-vf", "drawbox=t=fill:c=black:enable='lt(t,1)'",
+         "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p",
+         str(clip)], check=True)
+    return clip
+
+
+def test_blank_grace_window(blank_then_content, tmp_path):
+    strict = rules_file(tmp_path, {"type": "no_blank_frames"})
+    out = ci(str(blank_then_content), strict)
+    assert out["pass"] is False
+    assert out["rules"][0]["detail"]["first_blank_s"] == 0.0
+    graced = rules_file(
+        tmp_path, {"type": "no_blank_frames", "after_s": 1.5})
+    assert ci(str(blank_then_content), graced)["pass"] is True
+
+
 def test_freeze_rule(media, tmp_path):
     rules = rules_file(tmp_path, {"type": "max_freeze_s", "seconds": 0.3})
     proc = run_cli("ci", str(media["freeze"]), "--rules", rules)
@@ -83,6 +106,9 @@ def test_freeze_rule(media, tmp_path):
 def test_malformed_rules_exit_2_not_1(media, tmp_path):
     bogus = rules_file(tmp_path, {"type": "bogus"})
     assert run_cli("ci", str(media["clean"]), "--rules", bogus).returncode == 2
+    bad_grace = rules_file(
+        tmp_path, {"type": "no_blank_frames", "after_s": "soon"})
+    assert run_cli("ci", str(media["clean"]), "--rules", bad_grace).returncode == 2
     notjson = tmp_path / "bad.json"
     notjson.write_text("{nope", encoding="utf-8")
     assert run_cli("ci", str(media["clean"]), "--rules", str(notjson)).returncode == 2

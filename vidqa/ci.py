@@ -5,7 +5,8 @@ Rules file shape: {"rules": [{"type": ..., ...}, ...]} with types:
   forbid_text     {words? | builtin: "error_pages"}   words must never appear
   expect_template {file, by_s?}        element image must become visible
   max_freeze_s    {seconds}            no static-content freeze longer than this
-  no_blank_frames {}                   no near-uniform (blank) frame
+  no_blank_frames {after_s?}           no near-uniform (blank) frame at/after
+                                       after_s (grace for pre-paint load blanks)
 """
 import json
 import os
@@ -67,7 +68,8 @@ def _load_rules(rules_file):
             continue
         if kind == "max_freeze_s" and isinstance(rule.get("seconds"), (int, float)):
             continue
-        if kind == "no_blank_frames":
+        if kind == "no_blank_frames" and isinstance(
+                rule.get("after_s", 0), (int, float)):
             continue
         raise ToolError(f"invalid rule: {json.dumps(rule, sort_keys=True)}")
     return rules
@@ -144,6 +146,7 @@ def _evaluate(rule, samples, freezes, tpl_rules):
         ok = not unbounded and worst <= limit
         return {"rule": rule, "pass": ok,
                 "detail": {"worst_s": None if unbounded else r4(worst)}}
-    blanks = [s["t"] for s in samples if s["blank"]]
+    blanks = [s["t"] for s in samples
+              if s["blank"] and s["t"] >= rule.get("after_s", 0)]
     return {"rule": rule, "pass": not blanks,
             "detail": {"first_blank_s": r4(blanks[0])} if blanks else {}}
