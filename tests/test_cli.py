@@ -23,6 +23,22 @@ def test_diff_gate_exit_codes(media):
     assert bad.returncode == 1
 
 
+def test_garbage_input_fails_cleanly(tmp_path):
+    junk = tmp_path / "junk.mp4"
+    junk.write_bytes(b"this is not a video at all")
+    proc = run_cli("probe", str(junk))
+    assert proc.returncode == 2
+    assert proc.stdout == ""
+    assert proc.stderr.startswith("vidqa: ")
+    assert "Traceback" not in proc.stderr
+
+
+def test_unknown_flag_exits_2(media):
+    proc = run_cli("probe", str(media["clean"]), "--no-such-flag")
+    assert proc.returncode == 2
+    assert proc.stdout == ""
+
+
 def test_output_is_deterministic_and_compact(media):
     first = run_cli("timing", str(media["freeze"]))
     second = run_cli("timing", str(media["freeze"]))

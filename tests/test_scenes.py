@@ -12,3 +12,10 @@ def test_clean_video_single_scene(media):
     result = scenes(str(media["clean"]))
     assert result["scene_count"] == 1
     assert result["cuts"] == []
+
+
+def test_threshold_knob_routes(media):
+    # raised far enough, even the hard red->bars cut stops counting
+    result = scenes(str(media["cut"]), threshold=95)
+    assert result["scene_count"] == 1
+    assert result["cuts"] == []
