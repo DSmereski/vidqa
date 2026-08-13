@@ -98,6 +98,9 @@ def mcp(media):
 
     VIDQA_PRESENTMON is forced to a nonexistent path so the live tool's
     error contract is deterministic even on machines with a bundled exe.
+    stderr goes to DEVNULL to keep ~27 tests quiet (including a harmless
+    access-violation dump some Windows machines print at teardown); if a
+    shared-server test fails mysteriously, switch to PIPE and read it.
     """
     env = dict(os.environ, VIDQA_PRESENTMON="vidqa-tests-no-such-presentmon.exe")
     proc = subprocess.Popen(

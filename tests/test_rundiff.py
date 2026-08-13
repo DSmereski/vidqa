@@ -148,7 +148,11 @@ def test_step_mode_same_video_matches(pair, tmp_path):
 def test_reencode_jitter_tolerated(media, tmp_path):
     """Same content through a lossy re-encode must NOT read as divergence:
     the thresholds exist to catch UI changes, not compression noise
-    (crf 28 measures mean_distance 0.5 against threshold 8)."""
+    (crf 28 measures mean_distance 0.5 against threshold 8).
+
+    CI installs ffmpeg unpinned — if a routine ffmpeg/libx264 upgrade ever
+    breaks the suite, check this test first: its margin tracks encoder
+    noise, not vidqa code."""
     reencoded = tmp_path / "reencode.mp4"
     subprocess.run(
         ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
