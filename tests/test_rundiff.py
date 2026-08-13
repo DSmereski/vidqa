@@ -4,6 +4,7 @@ import sys
 
 import pytest
 
+from vidqa.ffutil import ToolError
 from vidqa.rundiff import rundiff
 
 
@@ -142,6 +143,33 @@ def test_step_mode_same_video_matches(pair, tmp_path):
     result = rundiff(str(pair["a"]), str(pair["a"]), trace_a=ta, trace_b=tb)
     assert result["diverged"] is False
     assert result["first_divergent_step"] is None
+
+
+def test_reencode_jitter_tolerated(media, tmp_path):
+    """Same content through a lossy re-encode must NOT read as divergence:
+    the thresholds exist to catch UI changes, not compression noise
+    (crf 28 measures mean_distance 0.5 against threshold 8)."""
+    reencoded = tmp_path / "reencode.mp4"
+    subprocess.run(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+         "-i", str(media["clean"]), "-c:v", "libx264", "-crf", "28",
+         "-pix_fmt", "yuv420p", str(reencoded)], check=True)
+    result = rundiff(str(media["clean"]), str(reencoded))
+    assert result["diverged"] is False
+    assert result["mean_distance"] <= 2.0
+
+
+def test_step_must_be_positive(media):
+    with pytest.raises(ToolError):
+        rundiff(str(media["clean"]), str(media["clean"]), step=0)
+    assert run_cli("rundiff", str(media["clean"]), str(media["clean"]),
+                   "--step", "0").returncode == 2
+
+
+def test_lone_trace_arg_rejected(media, tmp_path):
+    ta = step_trace(tmp_path / "a.zip", [("goto", 1.0)])
+    with pytest.raises(ToolError):
+        rundiff(str(media["clean"]), str(media["clean"]), trace_a=ta)
 
 
 def test_step_title_mismatch_is_divergence(pair, tmp_path):

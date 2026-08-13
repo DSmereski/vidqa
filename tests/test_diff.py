@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+import sys
 
 import pytest
 
@@ -15,19 +16,21 @@ def test_identical_frames_pass(media):
     assert result["scene_match"] is True
 
 
+def _panel_frame(color, out):
+    """Dark page with a filled panel; used for luma-matched hue-swap pairs."""
+    subprocess.run(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+         "-f", "lavfi", "-i", "color=c=0x12141a:duration=0.1:size=320x240:rate=25",
+         "-vf", f"drawbox=x=80:y=60:w=160:h=120:color={color}@1:t=fill",
+         "-frames:v", "1", str(out)], check=True)
+    return out
+
+
 def test_hue_swap_fails_via_color_worst_cell(tmp_path):
     """Green panel vs red panel at matched gray value: SSIM and pHash are
     grayscale and blind to it — only the color worst-cell catches it."""
-    def frame(color, out):
-        subprocess.run(
-            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-             "-f", "lavfi", "-i", "color=c=0x12141a:duration=0.1:size=320x240:rate=25",
-             "-vf", f"drawbox=x=80:y=60:w=160:h=120:color={color}@1:t=fill",
-             "-frames:v", "1", str(out)], check=True)
-        return out
-
-    green = frame("0x12301e", tmp_path / "green.png")
-    red = frame("0x4a1010", tmp_path / "red.png")
+    green = _panel_frame("0x12301e", tmp_path / "green.png")
+    red = _panel_frame("0x4a1010", tmp_path / "red.png")
     result = diff(str(red), str(green))
     assert result["pass"] is False
     assert result["worst_cell"]["mad"] > 25.0
@@ -96,3 +99,20 @@ def test_ignore_rect_excuses_dynamic_region(media):
 def test_ignore_out_of_bounds_raises(media):
     with pytest.raises(ToolError):
         diff(str(media["same"]), str(media["golden"]), ignore=[[300, 0, 100, 50]])
+
+
+def test_threshold_knobs_route(tmp_path):
+    """cell_max and ssim_min are the two verdict gates; each provably owns
+    the pass/fail on its own (hue pair measures mad 55, ssim 0.9976)."""
+    green = _panel_frame("0x12301e", tmp_path / "green.png")
+    red = _panel_frame("0x4a1010", tmp_path / "red.png")
+    assert diff(str(red), str(green))["pass"] is False
+    loosened = diff(str(red), str(green), cell_max=100)
+    assert loosened["pass"] is True
+    strict = diff(str(red), str(green), cell_max=100, ssim_min=0.999)
+    assert strict["pass"] is False
+    proc = subprocess.run(
+        [sys.executable, "-m", "vidqa.cli", "diff", str(red),
+         "--golden", str(green), "--cell-max", "100"],
+        capture_output=True, text=True)
+    assert proc.returncode == 0  # the CLI flag reaches the same gate
