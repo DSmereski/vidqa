@@ -47,6 +47,46 @@ def test_golden_gate_wired_in(media):
     assert "golden_diff_failed" in bad["verdict"]["issues"]
 
 
+def test_stutter_composes_into_verdict(media):
+    result = report(str(media["gap"]))  # one 280 ms pts gap
+    assert result["verdict"]["pass"] is False
+    assert any(i.startswith("stutter_events=") for i in result["verdict"]["issues"])
+
+
+def test_audio_clipping_composes_into_verdict(tmp_path):
+    clipped = tmp_path / "clipav.mp4"
+    subprocess.run(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+         "-f", "lavfi", "-i", "testsrc2=duration=2:size=320x240:rate=25",
+         "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+         "-af", "volume=20", "-c:v", "libx264", "-qp", "0",
+         "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(clipped)],
+        check=True)
+    result = report(str(clipped))
+    assert result["verdict"]["pass"] is False
+    assert "audio_clipping" in result["verdict"]["issues"]
+
+
+def test_finite_silence_threshold_both_ways(media, monkeypatch):
+    import vidqa.audio
+
+    def fake_audio(silences):
+        return lambda path: {
+            "silence_count": len(silences), "silences": silences,
+            "max_volume_db": -18.1, "mean_volume_db": -30.0,
+            "clipping_suspected": False,
+        }
+
+    monkeypatch.setattr(vidqa.audio, "audio",
+                        fake_audio([{"start_s": 0.5, "duration_s": 3.0}]))
+    long_silence = report(str(media["av"]))
+    assert "silence@0.5s(3.0s)" in long_silence["verdict"]["issues"]
+    monkeypatch.setattr(vidqa.audio, "audio",
+                        fake_audio([{"start_s": 0.5, "duration_s": 1.5}]))
+    short_silence = report(str(media["av"]))
+    assert short_silence["verdict"]["pass"] is True
+
+
 def test_cli_report_exit_codes_and_size(media):
     ok = subprocess.run(
         [sys.executable, "-m", "vidqa.cli", "report", str(media["clean"])],

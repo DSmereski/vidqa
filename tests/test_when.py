@@ -47,3 +47,13 @@ def test_deterministic(media):
     b = run_cli("when", str(media["flash"]), "ERROR")
     assert a.returncode == b.returncode == 0
     assert a.stdout == b.stdout
+
+
+def test_boundary_sampling_lands_before_the_instant(media):
+    """PINNED BEHAVIOR: the fps filter emits the frame just BEFORE each
+    sample instant — at step 1.5 the second sample lands ~0.96s, so the
+    [1,2] text window is MISSED even though the nominal instant 1.5 sits
+    inside it. Callers must pick a step that puts a sample in the window."""
+    missed = when(str(media["flash"]), text="ERROR", step=1.5)
+    assert missed["found"] is False
+    assert when(str(media["flash"]), text="ERROR", step=0.5)["found"] is True
