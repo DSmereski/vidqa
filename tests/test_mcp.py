@@ -1,116 +1,42 @@
+"""MCP surface e2e: one real stdio server, every registered tool through it."""
 import itertools
 import json
 import os
-import re
 import subprocess
 import sys
 import threading
 import time
-import zipfile
 from types import SimpleNamespace
 
 import pytest
 
-
-def test_mcp_stdio_roundtrip(media):
-    proc = subprocess.Popen(
-        [sys.executable, "-m", "vidqa.mcp_server"],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        text=True, encoding="utf-8",
-    )
-    responses = {}
-
-    def reader():
-        for line in proc.stdout:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                msg = json.loads(line)
-            except ValueError:
-                continue
-            if "id" in msg:
-                responses[msg["id"]] = msg
-
-    threading.Thread(target=reader, daemon=True).start()
-
-    def send(msg):
-        proc.stdin.write(json.dumps(msg) + "\n")
-        proc.stdin.flush()
-
-    try:
-        send({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-              "params": {"protocolVersion": "2025-03-26", "capabilities": {},
-                         "clientInfo": {"name": "test", "version": "0"}}})
-        send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-        send({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
-        send({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
-              "params": {"name": "probe",
-                         "arguments": {"path": str(media["clean"])}}})
-        send({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
-              "params": {"name": "probe",
-                         "arguments": {"path": "does-not-exist.mp4"}}})
-        send({"jsonrpc": "2.0", "id": 5, "method": "tools/call",
-              "params": {"name": "when",
-                         "arguments": {"path": str(media["flash"]),
-                                       "text": "ERROR"}}})
-        deadline = time.time() + 120
-        while time.time() < deadline and not {2, 3, 4, 5} <= responses.keys():
-            time.sleep(0.2)
-    finally:
-        try:
-            proc.stdin.close()
-            proc.wait(timeout=15)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-
-    assert {2, 3, 4, 5} <= responses.keys(), f"responses seen: {sorted(responses)}"
-    tools = {t["name"] for t in responses[2]["result"]["tools"]}
-    assert tools == {"probe", "timing", "diff", "scenes", "report", "audio",
-                     "ocr", "find", "ask", "live", "speech", "when", "shot",
-                     "strip", "clip", "ci", "trace", "record_android", "srt",
-                     "rundiff", "load", "bugpack", "text", "redact",
-                     "locate", "judge", "moments",
-                     "contrast"}  # every CLI command, exactly
-
-    call = responses[3]["result"]
-    assert not call.get("isError"), call
-    parsed = call.get("structuredContent") or json.loads(call["content"][0]["text"])
-    if "result" in parsed:  # SDK wraps bare dict returns
-        parsed = parsed["result"]
-    assert parsed["video"]["width"] == 320
-
-    bad = responses[4]["result"]
-    assert bad.get("isError") is True
-    assert "file not found" in bad["content"][0]["text"]
-
-    hit = responses[5]["result"]
-    assert not hit.get("isError"), hit
-    parsed = hit.get("structuredContent") or json.loads(hit["content"][0]["text"])
-    if "result" in parsed:
-        parsed = parsed["result"]
-    assert parsed["found"] is True and parsed["mode"] == "text"
+from test_ci import rules_file
+from test_trace import make_trace
+from vidqa.cli import subcommands
+from vidqa.ffutil import ERR_FILE_NOT_FOUND
+from vidqa.live import ERR_NO_PRESENTMON
+from vidqa.record_android import ERR_NO_ADB, ERR_NO_DEVICE
 
 
 @pytest.fixture(scope="module")
 def mcp(media):
-    """One running stdio server shared by the per-tool tests below.
+    """One running stdio server shared by every test in this module.
 
     VIDQA_PRESENTMON is forced to a nonexistent path so the live tool's
     error contract is deterministic even on machines with a bundled exe.
-    stderr goes to DEVNULL to keep ~27 tests quiet (including a harmless
-    access-violation dump some Windows machines print at teardown); if a
-    shared-server test fails mysteriously, switch to PIPE and read it.
+    Teardown asserts the server exits 0 with a silent stderr, so a native
+    teardown crash or log noise fails the suite instead of hiding.
     """
     env = dict(os.environ, VIDQA_PRESENTMON="vidqa-tests-no-such-presentmon.exe")
     proc = subprocess.Popen(
         [sys.executable, "-m", "vidqa.mcp_server"],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL, text=True, encoding="utf-8", env=env,
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, encoding="utf-8", env=env,
     )
     responses = {}
+    stderr_lines = []
 
-    def reader():
+    def read_stdout():
         for line in proc.stdout:
             line = line.strip()
             if not line:
@@ -119,10 +45,12 @@ def mcp(media):
                 msg = json.loads(line)
             except ValueError:
                 continue
-            if "id" in msg:
+            if isinstance(msg, dict) and "id" in msg:
                 responses[msg["id"]] = msg
 
-    threading.Thread(target=reader, daemon=True).start()
+    threading.Thread(target=read_stdout, daemon=True).start()
+    threading.Thread(target=lambda: stderr_lines.extend(proc.stderr),
+                     daemon=True).start()
     ids = itertools.count(1)
 
     def rpc(method, params=None, timeout=180):
@@ -134,45 +62,45 @@ def mcp(media):
         proc.stdin.flush()
         deadline = time.time() + timeout
         while time.time() < deadline and i not in responses:
+            assert proc.poll() is None, (
+                f"server died (rc {proc.returncode}): "
+                + "".join(stderr_lines)[-2000:])
             time.sleep(0.1)
         assert i in responses, f"no response to {method} (id {i})"
-        return responses[i]
+        resp = responses[i]
+        assert "error" not in resp, resp["error"]
+        return resp
 
     def call(name, arguments):
         return rpc("tools/call", {"name": name, "arguments": arguments})["result"]
 
-    rpc("initialize", {"protocolVersion": "2025-03-26", "capabilities": {},
-                       "clientInfo": {"name": "test", "version": "0"}})
+    init = rpc("initialize", {"protocolVersion": "2025-03-26", "capabilities": {},
+                              "clientInfo": {"name": "test", "version": "0"}})
+    assert "result" in init, init
     proc.stdin.write(json.dumps(
         {"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
     proc.stdin.flush()
 
     yield SimpleNamespace(rpc=rpc, call=call)
 
+    proc.stdin.close()
     try:
-        proc.stdin.close()
         proc.wait(timeout=15)
     except subprocess.TimeoutExpired:
         proc.kill()
+        raise
+    assert proc.returncode == 0, f"server exited {proc.returncode}"
+    assert not stderr_lines, "".join(stderr_lines)[-2000:]
 
 
-def _unwrap(result):
-    parsed = result.get("structuredContent") or json.loads(result["content"][0]["text"])
-    if "result" in parsed:  # SDK wraps bare dict returns
-        parsed = parsed["result"]
-    return parsed
+def _payload(result):
+    # bare `-> dict` tools: the SDK serializes the return value as the text
+    # content, unwrapped, and leaves structuredContent unset
+    return json.loads(result["content"][0]["text"])
 
 
-def _rules(tmp_path):
-    path = tmp_path / "rules.json"
-    path.write_text(json.dumps({"rules": [{"type": "no_blank_frames"}]}),
-                    encoding="utf-8")
-    return str(path)
-
-
-def _tracezip(tmp_path):
-    path = tmp_path / "trace.zip"
-    events = [
+def _trace_events():
+    return [
         {"type": "context-options", "monotonicTime": 1000.0,
          "wallTime": 1722400000000},
         {"type": "before", "callId": "call@1", "startTime": 1500.0,
@@ -180,65 +108,86 @@ def _tracezip(tmp_path):
          "params": {"url": "http://x", "timeout": 30000}},
         {"type": "after", "callId": "call@1", "endTime": 2200.0},
     ]
-    with zipfile.ZipFile(path, "w") as z:
-        z.writestr("trace.trace", "\n".join(json.dumps(e) for e in events))
-    return str(path)
 
 
-# probe and when get their round-trips in test_mcp_stdio_roundtrip above;
-# every other tool with a deterministic happy path is here.
+# (args, check) per tool with a deterministic happy path; the check must
+# catch a functionally dead tool, not just a transport failure.
 OK = {
-    "timing": lambda m, t: {"path": str(m["clean"])},
-    "diff": lambda m, t: {"candidate": str(m["same"]), "golden": str(m["golden"])},
-    "scenes": lambda m, t: {"path": str(m["cut"])},
-    "report": lambda m, t: {"path": str(m["clean"])},
-    "audio": lambda m, t: {"path": str(m["av"])},
-    "shot": lambda m, t: {"path": str(m["clean"]), "out": str(t / "shot.png"),
-                          "at": 0.5},
-    "moments": lambda m, t: {"path": str(m["cut"])},
-    "contrast": lambda m, t: {"path": str(m["flash"]), "at": 1.5},
-    "locate": lambda m, t: {"path": str(m["flash"]), "fail_text": "ERROR"},
-    "text": lambda m, t: {"path": str(m["flash"]), "step": 1.0},
-    "redact": lambda m, t: {"path": str(m["clean"]),
-                            "out": str(t / "redacted.mp4"),
-                            "regions": [[10, 10, 50, 50]]},
-    "strip": lambda m, t: {"path": str(m["clean"]), "out": str(t / "strip.png")},
-    "clip": lambda m, t: {"path": str(m["clean"]), "out": str(t / "clip.mp4"),
-                          "start": 0.2, "end": 0.8},
-    "load": lambda m, t: {"path": str(m["clean"])},
-    "bugpack": lambda m, t: {"path": str(m["clean"]), "at": 0.5,
-                             "out": str(t / "pack")},
-    "srt": lambda m, t: {"path": str(m["cut"]), "out": str(t / "events.srt")},
-    "rundiff": lambda m, t: {"a": str(m["clean"]), "b": str(m["clean"]),
-                             "step": 1.0},
-    "ci": lambda m, t: {"path": str(m["clean"]), "rules": _rules(t)},
-    "trace": lambda m, t: {"path": _tracezip(t)},
-    "ocr": lambda m, t: {"path": str(m["text"])},
-    "find": lambda m, t: {"path": str(m["golden"]), "template": str(m["tpl"])},
+    "timing": (lambda m, t: {"path": str(m["clean"])},
+               lambda p, t: p["dup_frames"] == 0),
+    "diff": (lambda m, t: {"candidate": str(m["same"]), "golden": str(m["golden"])},
+             lambda p, t: p["pass"] is True),
+    "scenes": (lambda m, t: {"path": str(m["cut"])},
+               lambda p, t: p["scene_count"] == 2),
+    "report": (lambda m, t: {"path": str(m["clean"])},
+               lambda p, t: p["verdict"]["pass"] is True),
+    "audio": (lambda m, t: {"path": str(m["av"])},
+              lambda p, t: p["clipping_suspected"] is False),
+    "shot": (lambda m, t: {"path": str(m["clean"]), "out": str(t / "shot.png"),
+                           "at": 0.5},
+             lambda p, t: (t / "shot.png").exists()),
+    "moments": (lambda m, t: {"path": str(m["cut"])},
+                lambda p, t: any(x["type"] == "cut" for x in p["moments"])),
+    "contrast": (lambda m, t: {"path": str(m["flash"]), "at": 1.5},
+                 lambda p, t: p["checked"] >= 1),
+    "locate": (lambda m, t: {"path": str(m["flash"]), "fail_text": "ERROR"},
+               lambda p, t: p["found"] is True and p["first_bad_s"] == 1.0),
+    "text": (lambda m, t: {"path": str(m["flash"]), "step": 1.0},
+             lambda p, t: any("ERROR" in x["text"].upper() for x in p["lines"])),
+    "redact": (lambda m, t: {"path": str(m["clean"]),
+                             "out": str(t / "redacted.mp4"),
+                             "regions": [[10, 10, 50, 50]]},
+               lambda p, t: (t / "redacted.mp4").exists()),
+    "strip": (lambda m, t: {"path": str(m["clean"]), "out": str(t / "strip.png")},
+              lambda p, t: (t / "strip.png").exists()),
+    "clip": (lambda m, t: {"path": str(m["clean"]), "out": str(t / "clip.mp4"),
+                           "start": 0.2, "end": 0.8},
+             lambda p, t: (t / "clip.mp4").exists()),
+    "load": (lambda m, t: {"path": str(m["clean"])},
+             lambda p, t: p["first_content_s"] == 0.0),
+    "bugpack": (lambda m, t: {"path": str(m["clean"]), "at": 0.5,
+                              "out": str(t / "pack")},
+                lambda p, t: "summary.md" in p["files"]),
+    "srt": (lambda m, t: {"path": str(m["cut"]), "out": str(t / "events.srt")},
+            lambda p, t: (t / "events.srt").exists()),
+    "rundiff": (lambda m, t: {"a": str(m["clean"]), "b": str(m["clean"]),
+                              "step": 1.0},
+                lambda p, t: p["diverged"] is False),
+    "ci": (lambda m, t: {"path": str(m["clean"]),
+                         "rules": rules_file(t, {"type": "no_blank_frames"})},
+           lambda p, t: p["pass"] is True),
+    "trace": (lambda m, t: {"path": make_trace(t / "trace.zip", _trace_events())},
+              lambda p, t: p["step_count"] == 1),
+    "ocr": (lambda m, t: {"path": str(m["text"])},
+            lambda p, t: p["block_count"] >= 1),
+    "find": (lambda m, t: {"path": str(m["golden"]), "template": str(m["tpl"])},
+             lambda p, t: p["found"] is True),
 }
 
 # Tools whose happy path needs a model, device, or ETW session: their
-# deterministic contract through MCP is the early-validation error.
+# deterministic contract through MCP is the early-validation error,
+# matched on the stable prefixes the modules export.
 ERR = {
     "judge": (lambda m, t: {"path": "no-such.mp4", "rubric": "no-such.md"},
-              ("file not found",)),
+              (ERR_FILE_NOT_FOUND,)),
     "ask": (lambda m, t: {"path": "no-such.mp4", "question": "ok?"},
-            ("file not found",)),
-    "speech": (lambda m, t: {"path": "no-such.mp4"}, ("file not found",)),
+            (ERR_FILE_NOT_FOUND,)),
+    "speech": (lambda m, t: {"path": "no-such.mp4"}, (ERR_FILE_NOT_FOUND,)),
     "live": (lambda m, t: {"process": "no-such-process.exe", "seconds": 1},
-             ("PresentMon exe not found",)),
+             (ERR_NO_PRESENTMON,)),
     "record_android": (lambda m, t: {"cmd": "echo hi", "out": str(t / "rec.mp4"),
                                      "serial": "vidqa-no-such-device"},
-                       ("adb not found", "no Android device ready")),
+                       (ERR_NO_ADB, ERR_NO_DEVICE)),
 }
 
 
 @pytest.mark.parametrize("name", sorted(OK))
 def test_tool_roundtrip(mcp, media, tmp_path, name):
-    result = mcp.call(name, OK[name](media, tmp_path))
+    build, check = OK[name]
+    result = mcp.call(name, build(media, tmp_path))
     assert not result.get("isError"), result
-    parsed = _unwrap(result)
-    assert isinstance(parsed, dict) and parsed
+    parsed = _payload(result)
+    assert check(parsed, tmp_path), parsed
 
 
 @pytest.mark.parametrize("name", sorted(ERR))
@@ -250,11 +199,40 @@ def test_tool_error_contract(mcp, media, tmp_path, name):
     assert any(n in text for n in needles), text
 
 
+def test_probe_roundtrip_deep(mcp, media):
+    result = mcp.call("probe", {"path": str(media["clean"])})
+    assert not result.get("isError"), result
+    assert _payload(result)["video"]["width"] == 320
+
+
+def test_missing_file_is_error(mcp):
+    result = mcp.call("probe", {"path": "does-not-exist.mp4"})
+    assert result.get("isError") is True
+    assert ERR_FILE_NOT_FOUND in result["content"][0]["text"]
+
+
+def test_when_roundtrip_deep(mcp, media):
+    result = mcp.call("when", {"path": str(media["flash"]), "text": "ERROR"})
+    assert not result.get("isError"), result
+    parsed = _payload(result)
+    assert parsed["found"] is True and parsed["mode"] == "text"
+
+
 def test_mcp_roster_matches_cli_commands(mcp):
     tools = {t["name"] for t in mcp.rpc("tools/list")["result"]["tools"]}
-    proc = subprocess.run([sys.executable, "-m", "vidqa.cli", "--help"],
-                          capture_output=True, text=True)
-    match = re.search(r"\{([a-z0-9_,-]+)\}", proc.stdout)
-    assert match, proc.stdout
-    cli = set(match.group(1).split(","))
-    assert {t.replace("_", "-") for t in tools} == cli
+    assert {t.replace("_", "-") for t in tools} == set(subcommands())
+
+
+def test_mcp_exposes_cli_tuning_knobs(mcp):
+    tools = {t["name"]: t for t in mcp.rpc("tools/list")["result"]["tools"]}
+    knobs = {"scenes": {"threshold"}, "when": {"threshold"},
+             "find": {"threshold"}, "diff": {"ssim_min", "cell_max", "mask_out"}}
+    for name, want in knobs.items():
+        props = set(tools[name]["inputSchema"]["properties"])
+        assert want <= props, (name, sorted(props))
+
+
+def test_knob_reaches_the_module(mcp, media):
+    result = mcp.call("scenes", {"path": str(media["cut"]), "threshold": 95})
+    parsed = _payload(result)
+    assert parsed["scene_count"] == 1 and parsed["cuts"] == []

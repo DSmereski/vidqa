@@ -16,21 +16,18 @@ def test_identical_frames_pass(media):
     assert result["scene_match"] is True
 
 
-def _panel_frame(color, out):
-    """Dark page with a filled panel; used for luma-matched hue-swap pairs."""
-    subprocess.run(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-         "-f", "lavfi", "-i", "color=c=0x12141a:duration=0.1:size=320x240:rate=25",
-         "-vf", f"drawbox=x=80:y=60:w=160:h=120:color={color}@1:t=fill",
-         "-frames:v", "1", str(out)], check=True)
-    return out
+@pytest.fixture(scope="module")
+def hue_frames(panel, tmp_path_factory):
+    """Luma-matched hue-swap pair from the shared panel builder."""
+    root = tmp_path_factory.mktemp("hue_png")
+    return (str(panel("0x12301e", root / "green.png")),
+            str(panel("0x4a1010", root / "red.png")))
 
 
-def test_hue_swap_fails_via_color_worst_cell(tmp_path):
+def test_hue_swap_fails_via_color_worst_cell(hue_frames):
     """Green panel vs red panel at matched gray value: SSIM and pHash are
     grayscale and blind to it — only the color worst-cell catches it."""
-    green = _panel_frame("0x12301e", tmp_path / "green.png")
-    red = _panel_frame("0x4a1010", tmp_path / "red.png")
+    green, red = hue_frames
     result = diff(str(red), str(green))
     assert result["pass"] is False
     assert result["worst_cell"]["mad"] > 25.0
@@ -101,18 +98,17 @@ def test_ignore_out_of_bounds_raises(media):
         diff(str(media["same"]), str(media["golden"]), ignore=[[300, 0, 100, 50]])
 
 
-def test_threshold_knobs_route(tmp_path):
+def test_threshold_knobs_route(hue_frames):
     """cell_max and ssim_min are the two verdict gates; each provably owns
-    the pass/fail on its own (hue pair measures mad 55, ssim 0.9976)."""
-    green = _panel_frame("0x12301e", tmp_path / "green.png")
-    red = _panel_frame("0x4a1010", tmp_path / "red.png")
-    assert diff(str(red), str(green))["pass"] is False
-    loosened = diff(str(red), str(green), cell_max=100)
+    the pass/fail on its own (hue pair measures mad 55, ssim 0.9976; the
+    hue-swap test above proves the defaults fail this pair)."""
+    green, red = hue_frames
+    loosened = diff(red, green, cell_max=100)
     assert loosened["pass"] is True
-    strict = diff(str(red), str(green), cell_max=100, ssim_min=0.999)
+    strict = diff(red, green, cell_max=100, ssim_min=0.999)
     assert strict["pass"] is False
     proc = subprocess.run(
-        [sys.executable, "-m", "vidqa.cli", "diff", str(red),
-         "--golden", str(green), "--cell-max", "100"],
+        [sys.executable, "-m", "vidqa.cli", "diff", red,
+         "--golden", green, "--cell-max", "100"],
         capture_output=True, text=True)
     assert proc.returncode == 0  # the CLI flag reaches the same gate

@@ -35,20 +35,10 @@ def pair(tmp_path_factory):
 
 
 @pytest.fixture(scope="module")
-def hue_pair(tmp_path_factory):
+def hue_pair(panel, tmp_path_factory):
     """Same dark page, but the status panel is green in a / red in b at a
     matched gray value (37 vs 33) — invisible to grayscale pHash/SSIM."""
     root = tmp_path_factory.mktemp("hue")
-
-    def panel(color, out):
-        subprocess.run(
-            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-             "-f", "lavfi", "-i", "color=c=0x12141a:duration=2:size=320x240:rate=25",
-             "-vf", f"drawbox=x=80:y=60:w=160:h=120:color={color}@1:t=fill",
-             "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p", str(out)],
-            check=True)
-        return out
-
     return {"green": panel("0x12301e", root / "green.mp4"),
             "red": panel("0x4a1010", root / "red.mp4")}
 

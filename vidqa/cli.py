@@ -1,6 +1,8 @@
 """vidqa: local, deterministic video QA. Compact JSON on stdout.
 
-Exit codes: 0 = ok (gate passed), 1 = gate failed, 2 = error.
+Exit codes: 0 = ok (gate passed), 1 = gate failed, 2 = error. Code 2 covers
+both tool failures and bad usage (argparse exits 2 on usage errors); only
+0 vs 1 is a gate verdict.
 """
 import argparse
 import sys
@@ -8,7 +10,7 @@ import sys
 from .ffutil import ToolError, jdump, require_file
 
 
-def main(argv=None):
+def build_parser():
     parser = argparse.ArgumentParser(prog="vidqa", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -187,7 +189,17 @@ def main(argv=None):
     p.add_argument("--seconds", type=int, default=10)
     p.add_argument("--presentmon", default=None, help="path to PresentMon exe")
 
-    args = parser.parse_args(argv)
+    return parser
+
+
+def subcommands():
+    """The CLI command roster — importable source of truth for parity checks."""
+    action = build_parser()._subparsers._group_actions[0]
+    return sorted(action.choices)
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
     try:
         result, code = _dispatch(args)
     except ToolError as exc:

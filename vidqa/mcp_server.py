@@ -9,6 +9,11 @@ from .speech import MODEL_DEFAULT as SPEECH_MODEL_DEFAULT
 server = MCPServer("vidqa")
 
 
+def _given(**kw):
+    """Drop unset knobs so the modules' own defaults stay in charge."""
+    return {k: v for k, v in kw.items() if v is not None}
+
+
 @server.tool()
 def probe(path: str) -> dict:
     """Container/stream facts for a video: codecs, fps, duration, CFR/VFR."""
@@ -25,17 +30,23 @@ def timing(path: str) -> dict:
 
 @server.tool()
 def diff(candidate: str, golden: str, at: float | None = None,
-         ignore: list[list[int]] | None = None) -> dict:
-    """Compare a frame against a golden image; ignore = [[x,y,w,h], ...] dynamic regions."""
+         ignore: list[list[int]] | None = None,
+         ssim_min: float | None = None, cell_max: float | None = None,
+         mask_out: str | None = None) -> dict:
+    """Compare a frame against a golden image; ignore = [[x,y,w,h], ...] dynamic
+    regions; ssim_min/cell_max override the gate thresholds; mask_out writes a
+    diff-mask png."""
     from .diff import diff as impl
-    return impl(require_file(candidate), require_file(golden), at=at, ignore=ignore)
+    return impl(require_file(candidate), require_file(golden), at=at,
+                ignore=ignore, mask_out=mask_out,
+                **_given(ssim_min=ssim_min, cell_max=cell_max))
 
 
 @server.tool()
-def scenes(path: str) -> dict:
-    """Scene-cut timestamps."""
+def scenes(path: str, threshold: float | None = None) -> dict:
+    """Scene-cut timestamps; threshold = cut sensitivity (default 27)."""
     from .scenes import scenes as impl
-    return impl(require_file(path))
+    return impl(require_file(path), **_given(threshold=threshold))
 
 
 @server.tool()
@@ -56,12 +67,14 @@ def audio(path: str) -> dict:
 
 @server.tool()
 def when(path: str, text: str | None = None, template: str | None = None,
-         step: float = 0.5) -> dict:
-    """Find when given text (OCR) or a template image is visible: intervals in seconds."""
+         step: float = 0.5, threshold: float | None = None) -> dict:
+    """Find when given text (OCR) or a template image is visible: intervals in
+    seconds; threshold = template match floor (default 0.8)."""
     from .when import when as impl
     if template is not None:
         require_file(template)
-    return impl(require_file(path), text=text, template=template, step=step)
+    return impl(require_file(path), text=text, template=template, step=step,
+                **_given(threshold=threshold))
 
 
 @server.tool()
@@ -231,10 +244,13 @@ def ocr(path: str, at: float | None = None) -> dict:
 
 
 @server.tool()
-def find(path: str, template: str, at: float | None = None) -> dict:
-    """Locate a known UI element in a frame via template matching."""
+def find(path: str, template: str, at: float | None = None,
+         threshold: float | None = None) -> dict:
+    """Locate a known UI element in a frame via template matching;
+    threshold = match floor (default 0.8)."""
     from .find import find as impl
-    return impl(require_file(path), require_file(template), at=at)
+    return impl(require_file(path), require_file(template), at=at,
+                **_given(threshold=threshold))
 
 
 @server.tool()

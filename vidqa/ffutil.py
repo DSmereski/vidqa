@@ -13,6 +13,11 @@ class ToolError(RuntimeError):
     pass
 
 
+# Stable error-message prefixes: the contract tests (and any client that
+# branches on an error) match on these, so reword here, not inline.
+ERR_FILE_NOT_FOUND = "file not found"
+
+
 def safe_path(path):
     """ffmpeg/ffprobe read a leading '-' as an option; anchor such paths."""
     path = str(path)
@@ -43,7 +48,7 @@ def run(args, timeout=None):
 
 def require_file(path):
     if not os.path.exists(path):
-        raise ToolError(f"file not found: {path}")
+        raise ToolError(f"{ERR_FILE_NOT_FOUND}: {path}")
     return path
 
 

@@ -7,6 +7,9 @@ import time
 from .ffutil import ToolError
 
 DEVICE_TMP = "/sdcard/vidqa-record.mp4"
+# stable contract prefixes; tests and clients match on these
+ERR_NO_ADB = "adb not found"
+ERR_NO_DEVICE = "no Android device ready"
 
 
 def _wait_gone(base, tries=20):
@@ -23,12 +26,12 @@ def _wait_gone(base, tries=20):
 def record_android(cmd, out, serial=None, settle=1.0):
     adb = shutil.which("adb") or os.environ.get("VIDQA_ADB")
     if adb is None:
-        raise ToolError("adb not found on PATH (set VIDQA_ADB or install platform-tools)")
+        raise ToolError(f"{ERR_NO_ADB} on PATH (set VIDQA_ADB or install platform-tools)")
     base = [adb] + (["-s", serial] if serial else [])
     state = subprocess.run(base + ["get-state"], capture_output=True, text=True)
     if state.returncode != 0 or state.stdout.strip() != "device":
         raise ToolError(
-            f"no Android device ready: {(state.stderr or state.stdout).strip() or 'unknown'}"
+            f"{ERR_NO_DEVICE}: {(state.stderr or state.stdout).strip() or 'unknown'}"
         )
     rec = subprocess.Popen(base + ["shell", "screenrecord", DEVICE_TMP],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

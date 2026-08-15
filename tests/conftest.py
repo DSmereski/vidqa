@@ -18,6 +18,23 @@ def ff(*args):
 
 
 @pytest.fixture(scope="session")
+def panel():
+    """Builder for luma-matched hue-swap panels (green vs red at equal gray):
+    dark page with one filled box. '.png' out = single frame, else 2 s clip."""
+    def make(color, out):
+        args = ["-f", "lavfi", "-i",
+                f"color=c=0x12141a:duration=2:size={SIZE}:rate={FPS}",
+                "-vf", f"drawbox=x=80:y=60:w=160:h=120:color={color}@1:t=fill"]
+        if str(out).endswith(".png"):
+            args += ["-frames:v", "1"]
+        else:
+            args += ["-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p"]
+        ff(*args, str(out))
+        return out
+    return make
+
+
+@pytest.fixture(scope="session")
 def media(tmp_path_factory):
     root = tmp_path_factory.mktemp("media")
 

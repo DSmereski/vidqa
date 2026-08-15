@@ -7,6 +7,7 @@ import tempfile
 from .ffutil import ToolError, pct, r4, run
 
 PRESENTMON_ENV = "VIDQA_PRESENTMON"
+ERR_NO_PRESENTMON = "PresentMon exe not found"  # stable contract prefix
 # column name candidates across PresentMon 1.x / 2.x CSV schemas
 DELTA_COLUMNS = ("msbetweenpresents", "frametime", "msbetweendisplaychange")
 
@@ -15,7 +16,7 @@ def live(process, seconds=10, presentmon=None):
     exe = presentmon or os.environ.get(PRESENTMON_ENV) or _bundled()
     if not exe or not os.path.exists(exe):
         raise ToolError(
-            "PresentMon exe not found: pass --presentmon, set VIDQA_PRESENTMON, "
+            f"{ERR_NO_PRESENTMON}: pass --presentmon, set VIDQA_PRESENTMON, "
             "or drop PresentMon*.exe into the package's tools/ dir"
         )
     out = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)

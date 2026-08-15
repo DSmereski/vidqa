@@ -5,8 +5,15 @@ EVENT_CAP = 50
 
 
 def scenes(path, threshold=27.0):
+    import logging
+
     from scenedetect import ContentDetector, detect
 
+    # scenedetect logs "Detecting scenes..." at INFO; with any root handler
+    # installed (e.g. by an embedding MCP host) that leaks to stderr, and
+    # vidqa's contract is a silent stderr on success — pin it, like ocr.py
+    # pins rapidocr.
+    logging.getLogger("pyscenedetect").setLevel(logging.ERROR)
     scene_list = detect(path, ContentDetector(threshold=threshold))
     if not scene_list:
         return {"scene_count": 1, "cuts": []}
