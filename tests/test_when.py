@@ -49,11 +49,15 @@ def test_deterministic(media):
     assert a.stdout == b.stdout
 
 
-def test_boundary_sampling_lands_before_the_instant(media):
-    """PINNED BEHAVIOR: the fps filter emits the frame just BEFORE each
-    sample instant — at step 1.5 the second sample lands ~0.96s, so the
-    [1,2] text window is MISSED even though the nominal instant 1.5 sits
-    inside it. Callers must pick a step that puts a sample in the window."""
-    missed = when(str(media["flash"]), text="ERROR", step=1.5)
-    assert missed["found"] is False
-    assert when(str(media["flash"]), text="ERROR", step=0.5)["found"] is True
+def test_sampling_reads_the_frame_at_each_instant(media):
+    """Sample i is the frame ON SCREEN at instant i*step (fps round=up).
+    The filter's default rounding emits the frame from ~(i+0.5)*step,
+    which made every reported timestamp run half a step early and missed
+    this [1,2] window entirely at step 1.5. A window that fits wholly
+    between instants is still missable — pick a step no larger than the
+    shortest state you need to catch."""
+    found = when(str(media["flash"]), text="ERROR", step=1.5)
+    assert found["found"] is True  # instant 1.5 lies inside the [1,2] window
+    assert found["intervals"][0]["start_s"] == 1.5
+    missed = when(str(media["flash"]), text="ERROR", step=3.0)
+    assert missed["found"] is False  # no sample instant lands inside [1,2]

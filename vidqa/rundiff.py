@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 
 from .diff import _imwrite_png, _phash, color_sig, load_frame, zero_rects
-from .ffutil import ToolError, r4, run
+from .ffutil import ToolError, r4, run, sample_fps
 
 STEP_DEFAULT = 0.5
 # same-content re-encodes measure 0-2 bits apart; real UI changes 10+.
@@ -72,7 +72,7 @@ def _samples(path, step, ignore=None):
     scaled = None
     with tempfile.TemporaryDirectory() as td:
         run(["ffmpeg", "-hide_banner", "-loglevel", "error",
-             "-i", path, "-vf", f"fps={1.0 / step},scale={SAMPLE_WIDTH}:-2",
+             "-i", path, "-vf", sample_fps(step) + f",scale={SAMPLE_WIDTH}:-2",
              "-start_number", "0", os.path.join(td, "f%06d.png")])
         names = sorted(os.listdir(td))
         if not names:

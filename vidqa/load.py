@@ -11,7 +11,7 @@ import cv2
 import numpy as np
 
 from .diff import _phash
-from .ffutil import ToolError, r4, run
+from .ffutil import ToolError, r4, run, sample_fps
 
 STEP_DEFAULT = 0.25
 BLANK_STD = 3.0
@@ -25,7 +25,7 @@ def load(path, step=STEP_DEFAULT, content_by=None, settled_by=None):
     hashes = []
     with tempfile.TemporaryDirectory() as td:
         run(["ffmpeg", "-hide_banner", "-loglevel", "error",
-             "-i", path, "-vf", f"fps={1.0 / step},scale=256:-2",
+             "-i", path, "-vf", sample_fps(step) + ",scale=256:-2",
              "-start_number", "0", os.path.join(td, "f%06d.png")])
         names = sorted(os.listdir(td))
         if not names:

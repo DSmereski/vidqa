@@ -12,7 +12,7 @@ import tempfile
 import cv2
 
 from .diff import _imwrite_png
-from .ffutil import ToolError, r4, run
+from .ffutil import ToolError, r4, run, sample_fps
 
 STEP_DEFAULT = 0.5
 
@@ -28,7 +28,7 @@ def locate(path, fail_text, step=STEP_DEFAULT, shots=None):
     shot_paths = []
     with tempfile.TemporaryDirectory() as td:
         run(["ffmpeg", "-hide_banner", "-loglevel", "error",
-             "-i", path, "-vf", f"fps={1.0 / step}",
+             "-i", path, "-vf", sample_fps(step),
              "-start_number", "0", os.path.join(td, "f%06d.png")])
         names = sorted(os.listdir(td))
         if not names:

@@ -52,6 +52,17 @@ def ffprobe_json(path, *args):
     return json.loads(proc.stdout)
 
 
+def sample_fps(step):
+    """fps filter clause whose output frame i is what was ON SCREEN at i*step.
+
+    The filter's default rounding (near) emits the frame from roughly
+    (i + 0.5) * step, so every i*step label would run ~half a step early.
+    round=up keeps sample i = the last frame with pts <= i*step — the frame
+    a viewer saw at that instant (measured with a frame-indexed probe video).
+    """
+    return f"fps={1.0 / step}:round=up"
+
+
 def r4(x):
     return round(float(x), 4)
 

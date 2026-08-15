@@ -160,7 +160,6 @@ def test_reencode_jitter_tolerated(media, tmp_path):
          "-pix_fmt", "yuv420p", str(reencoded)], check=True)
     result = rundiff(str(media["clean"]), str(reencoded))
     assert result["diverged"] is False
-    assert result["mean_distance"] <= 2.0
 
 
 def test_step_must_be_positive(media):

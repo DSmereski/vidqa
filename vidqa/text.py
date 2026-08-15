@@ -10,7 +10,7 @@ import tempfile
 
 import cv2
 
-from .ffutil import ToolError, r4, run
+from .ffutil import ToolError, r4, run, sample_fps
 from .when import _intervals
 
 STEP_DEFAULT = 1.0
@@ -28,7 +28,7 @@ def text(path, step=STEP_DEFAULT, contains=None):
     seen = {}  # line -> set of sample indices where visible
     with tempfile.TemporaryDirectory() as td:
         run(["ffmpeg", "-hide_banner", "-loglevel", "error",
-             "-i", path, "-vf", f"fps={1.0 / step}",
+             "-i", path, "-vf", sample_fps(step),
              "-start_number", "0", os.path.join(td, "f%06d.png")])
         names = sorted(os.listdir(td))
         if not names:
